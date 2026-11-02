@@ -111,6 +111,7 @@ with sync_playwright() as p:
     mobile.wait_for_timeout(350)
     check("menu opens sidebar on phone", mobile.locator("#sidebar").bounding_box()["x"] == 0)
     mobile.screenshot(path=str(OUT / "step1-mobile-nav.png"))
+    mobile.locator('#sidebar details[data-section="knowledge"] summary').click()
     mobile.locator("#sidebar details:not(.recent) a", has_text="Giordano Bruno").click()
     mobile.wait_for_timeout(350)
     check("opening a note closes sidebar", mobile.locator("#sidebar").bounding_box()["x"] < 0)

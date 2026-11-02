@@ -107,6 +107,30 @@ function noteItem(note, extra = '') {
 }
 
 const RECENT_COUNT = 8;
+const OPEN_KEY = 'vault-open-sections';
+
+// Menu sections start closed except Recent, and remember what you open, since
+// the menu redraws every time a note opens.
+function openSections() {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(OPEN_KEY)) || ['recent']);
+  } catch {
+    return new Set(['recent']);
+  }
+}
+
+function rememberSection(name, open) {
+  const set = openSections();
+  if (open) set.add(name);
+  else set.delete(name);
+  try {
+    localStorage.setItem(OPEN_KEY, JSON.stringify([...set]));
+  } catch {
+    // storage blocked; sections just reset on redraw
+  }
+}
+
+const openAttr = (name) => (openSections().has(name) ? ' open' : '');
 
 // Notes opened or saved most recently on any device, newest first.
 function renderRecent() {
@@ -117,7 +141,7 @@ function renderRecent() {
     .slice(0, RECENT_COUNT);
   if (!recent.length) return '';
   const items = recent.map(({ note, at }) => noteItem(note, `<span class="sub">${escapeHtml(ago(at))}</span>`)).join('');
-  return `<details open class="recent"><summary>Recent<span class="count">${recent.length}</span></summary><ul>${items}</ul></details>`;
+  return `<details class="recent" data-section="recent"${openAttr('recent')}><summary>Recent<span class="count">${recent.length}</span></summary><ul>${items}</ul></details>`;
 }
 
 function renderTree() {
@@ -135,7 +159,7 @@ function renderTree() {
           return noteItem(n, sub ? `<span class="sub">${escapeHtml(sub)}</span>` : '');
         })
         .join('');
-      return `<details open><summary>${escapeHtml(name)}<span class="count">${notes.length}</span></summary><ul>${items}</ul></details>`;
+      return `<details data-section="${escapeHtml(name)}"${openAttr(name)}><summary>${escapeHtml(name)}<span class="count">${notes.length}</span></summary><ul>${items}</ul></details>`;
     })
     .join('');
 }
@@ -556,6 +580,15 @@ function wireEvents() {
   $('menu').addEventListener('click', () => setNav(!document.body.classList.contains('nav-open')));
   $('scrim').addEventListener('click', () => setNav(false));
   $('refresh').addEventListener('click', refresh);
+  // toggle does not bubble, so listen in the capture phase.
+  $('sidebar-list').addEventListener(
+    'toggle',
+    (e) => {
+      const name = e.target.dataset && e.target.dataset.section;
+      if (name) rememberSection(name, e.target.open);
+    },
+    true
+  );
   window.addEventListener('hashchange', route);
   window.addEventListener('beforeunload', (e) => {
     if (editor && editor.dirty) e.preventDefault();
