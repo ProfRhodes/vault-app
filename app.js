@@ -526,8 +526,9 @@ async function start() {
   wireEvents();
   registerWorker();
   $('vault-label').textContent = source.label;
+  const step = (msg) => ($('note').innerHTML = `<p class="empty">${escapeHtml(msg)}</p>`);
   try {
-    await Promise.all([vault.load(), state.load()]);
+    await Promise.all([vault.load(step), state.load()]);
   } catch (err) {
     $('note').innerHTML =
       `<p class="error">${escapeHtml(err.message)}</p>` +

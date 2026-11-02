@@ -5,6 +5,7 @@
 
 const API = 'https://api.github.com';
 const BATCH = 50;
+const TIMEOUT_MS = 30000;
 
 class GitHubError extends Error {
   constructor(message, status) {
@@ -33,11 +34,13 @@ const cache = {
   open() {
     if (this.db) return this.db;
     this.db = new Promise((resolve) => {
+      setTimeout(() => resolve(null), 3000);
       try {
         const req = indexedDB.open('vault-cache', 1);
         req.onupgradeneeded = () => req.result.createObjectStore('blobs');
         req.onsuccess = () => resolve(req.result);
         req.onerror = () => resolve(null);
+        req.onblocked = () => resolve(null);
       } catch {
         resolve(null);
       }
@@ -85,6 +88,8 @@ export class GitHubSource {
 
   async api(path, { method = 'GET', body, accept = 'application/vnd.github+json' } = {}) {
     let r;
+    const timeout = new AbortController();
+    const timer = setTimeout(() => timeout.abort(), TIMEOUT_MS);
     try {
       r = await fetch(API + path, {
         method,
@@ -96,9 +101,17 @@ export class GitHubSource {
         },
         body: body ? JSON.stringify(body) : undefined,
         cache: 'no-store',
+        signal: timeout.signal,
       });
     } catch {
-      throw new GitHubError('Could not reach GitHub. Check your connection.', 0);
+      throw new GitHubError(
+        timeout.signal.aborted
+          ? `GitHub did not answer within ${TIMEOUT_MS / 1000} seconds. Check your connection and reopen the app.`
+          : 'Could not reach GitHub. Check your connection.',
+        0
+      );
+    } finally {
+      clearTimeout(timer);
     }
     if (!r.ok) {
       let detail = '';
@@ -134,13 +147,14 @@ export class GitHubSource {
 
   // Fetches many notes at once: cached ones come from the device, the rest
   // arrive 50 per GraphQL request.
-  async readMany(paths) {
+  async readMany(paths, onProgress = () => {}) {
     const shas = paths.map((p) => this.shas.get(p));
     const cached = await cache.getMany(shas.map((s) => s || ''));
     const out = cached.map((t, i) => (shas[i] && typeof t === 'string' ? t : undefined));
     const todo = paths.map((p, i) => i).filter((i) => out[i] === undefined);
     const fresh = [];
     for (let start = 0; start < todo.length; start += BATCH) {
+      onProgress(start, todo.length);
       const batch = todo.slice(start, start + BATCH);
       const fields = batch
         .map((i, k) => `f${k}: object(expression: ${JSON.stringify(`${this.branch}:${paths[i]}`)}) { ... on Blob { text isBinary isTruncated } }`)
@@ -160,6 +174,7 @@ export class GitHubSource {
         }
       }
     }
+    if (todo.length) onProgress(todo.length, todo.length);
     await cache.putMany(fresh);
     return out;
   }

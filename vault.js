@@ -105,10 +105,13 @@ export class Vault {
     this.keys = new Map();
   }
 
-  async load() {
+  // onStep(message) reports progress, so a slow first load on a phone shows
+  // what it is doing instead of looking frozen.
+  async load(onStep = () => {}) {
+    onStep('Listing notes...');
     const paths = (await this.source.list()).filter((p) => /\.md$/i.test(p) && !p.startsWith('.vault/'));
     const texts = this.source.readMany
-      ? await this.source.readMany(paths)
+      ? await this.source.readMany(paths, (done, total) => onStep(`Downloading notes: ${done} of ${total}`))
       : await Promise.all(paths.map((p) => this.source.read(p)));
     this.notes.clear();
     paths.forEach((p, k) => {
