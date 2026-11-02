@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://api.github.com; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="theme-color" content="#0d0b14">
+  <title>Vault</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="app.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <button id="menu" class="icon-btn menu-btn" type="button" aria-label="Show notes" aria-expanded="false">&#9776;</button>
+    <a class="brand" href="#/">Vault</a>
+    <input id="search" type="search" placeholder="Search notes" autocomplete="off" spellcheck="false" aria-label="Search notes">
+    <a id="graph-btn" class="icon-btn" href="#/graph" aria-label="Graph view" title="Graph view">
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/></g><g fill="currentColor"><circle cx="12" cy="3" r="1.8"/><circle cx="19.8" cy="16.5" r="1.8"/><circle cx="4.2" cy="16.5" r="1.8"/><circle cx="12" cy="12" r="1.6"/></g></svg>
+    </a>
+  </header>
+  <div class="layout">
+    <nav id="sidebar" aria-label="Notes">
+      <div id="sidebar-list"></div>
+      <div class="sidebar-foot">
+        <span id="vault-label" class="vault-label"></span>
+        <button id="refresh" class="link-btn" type="button">Refresh</button>
+        <a href="#/settings">Settings</a>
+      </div>
+    </nav>
+    <div class="content">
+      <main id="note" tabindex="-1"><p class="empty">Loading the vault...</p></main>
+      <section id="graph" hidden aria-label="Graph of notes">
+        <canvas id="graph-canvas"></canvas>
+        <div class="graph-tools" role="group" aria-label="Graph layout">
+          <a class="seg" data-layout="web" href="#/graph/web">Web</a>
+          <a class="seg" data-layout="rings" href="#/graph/rings">Consolidation</a>
+          <a class="seg" data-layout="wheel" href="#/graph/wheel">Memory wheel</a>
+        </div>
+        <div id="graph-aligned" class="graph-aligned" hidden></div>
+        <details id="graph-legend" class="graph-legend">
+          <summary>Key</summary>
+          <div id="legend-body"></div>
+        </details>
+        <div id="graph-card" class="graph-card" hidden></div>
+      </section>
+    </div>
+  </div>
+  <div class="fab">
+    <a class="fab-btn" href="#/new" aria-label="New note" title="New note">+</a>
+    <a class="fab-btn primary" href="#/new/voice" aria-label="Voice note" title="Voice note">
+      <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></g></svg>
+    </a>
+  </div>
+  <div id="scrim"></div>
+</body>
+</html>

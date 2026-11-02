@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "notes": {
+    "notes/welcome.md": {
+      "firstSeen": 1793617903843,
+      "lastOpened": 1793631727843,
+      "opens": 2
+    },
+    "notes/how-this-vault-works.md": {
+      "firstSeen": 1793375983843,
+      "lastOpened": 1793548783843,
+      "opens": 2
+    },
+    "notes/voice-capture-idea.md": {
+      "firstSeen": 1793591983843
+    },
+    "notes/plans/memory-wheel-view.md": {
+      "firstSeen": 1792771183843,
+      "lastOpened": 1793462383843,
+      "opens": 3
+    },
+    "notes/shopping/standing-desk.md": {
+      "firstSeen": 1791907183843,
+      "lastOpened": 1793116783843,
+      "opens": 1
+    },
+    "knowledge/neuroscience/forgetting-curve.md": {
+      "firstSeen": 1790179183843,
+      "lastOpened": 1793203183843,
+      "opens": 4
+    },
+    "knowledge/neuroscience/spreading-activation.md": {
+      "firstSeen": 1789747183843,
+      "lastOpened": 1791043183843,
+      "opens": 2
+    },
+    "knowledge/occult/giordano-bruno.md": {
+      "firstSeen": 1783267183843,
+      "lastOpened": 1788451183843,
+      "opens": 1
+    },
+    "memory/MEMORY.md": {
+      "firstSeen": 1776355183843
+    },
+    "memory/feedback_sample_rule.md": {
+      "firstSeen": 1776355183843,
+      "lastOpened": 1785859183843,
+      "opens": 1
+    },
+    "memory/feedback_second_sample.md": {
+      "firstSeen": 1776355183843
+    }
+  },
+  "hebbian": {
+    "notes/shopping/standing-desk.md\nnotes/voice-capture-idea.md": 4,
+    "knowledge/neuroscience/forgetting-curve.md\nknowledge/neuroscience/spreading-activation.md": 3
+  },
+  "palace": {},
+  "turns": {}
+}
