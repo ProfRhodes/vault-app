@@ -37,8 +37,8 @@ with sync_playwright() as p:
     page.goto(BASE)
     page.wait_for_selector(".markdown")
     check("home note opens", page.locator(".markdown h1").inner_text() == "Welcome to the vault")
-    check("sidebar lists all 11 notes", page.locator("#sidebar li").count() == 11, str(page.locator("#sidebar li").count()))
-    groups = page.locator("#sidebar summary").all_inner_texts()
+    check("sidebar lists all 11 notes", page.locator("#sidebar details:not(.recent) li").count() == 11, str(page.locator("#sidebar details:not(.recent) li").count()))
+    groups = page.locator("#sidebar details:not(.recent) summary").all_inner_texts()
     check("groups ordered notes, memory, knowledge", [g.rstrip("0123456789").lower() for g in groups] == ["notes", "memory", "knowledge"], str(groups))
     check("resolved wikilinks on home", page.locator(".markdown a.wikilink").count() == 4, str(page.locator(".markdown a.wikilink").count()))
     check("missing wikilink shown as missing", page.locator(".markdown .wikilink.missing").inner_text() == "quiz-review-workflow")
@@ -88,7 +88,7 @@ with sync_playwright() as p:
     page.wait_for_timeout(300)
     check("empty search result message", "No notes match" in page.locator("#sidebar").inner_text())
     page.press("#search", "Escape")
-    check("escape clears search", page.locator("#sidebar li").count() == 11)
+    check("escape clears search", page.locator("#sidebar details:not(.recent) li").count() == 11)
 
     hostile = page.evaluate(
         """async () => {
@@ -111,7 +111,7 @@ with sync_playwright() as p:
     mobile.wait_for_timeout(350)
     check("menu opens sidebar on phone", mobile.locator("#sidebar").bounding_box()["x"] == 0)
     mobile.screenshot(path=str(OUT / "step1-mobile-nav.png"))
-    mobile.locator("#sidebar a", has_text="Giordano Bruno").click()
+    mobile.locator("#sidebar details:not(.recent) a", has_text="Giordano Bruno").click()
     mobile.wait_for_timeout(350)
     check("opening a note closes sidebar", mobile.locator("#sidebar").bounding_box()["x"] < 0)
     overflow = mobile.evaluate("document.documentElement.scrollWidth > window.innerWidth")

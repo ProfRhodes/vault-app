@@ -106,6 +106,20 @@ function noteItem(note, extra = '') {
   return `<li><a href="${noteHref(note.path)}"${active}>${escapeHtml(note.title)}${extra}</a></li>`;
 }
 
+const RECENT_COUNT = 8;
+
+// Notes opened or saved most recently on any device, newest first.
+function renderRecent() {
+  const recent = [...vault.notes.values()]
+    .map((note) => ({ note, at: state.info(note.path).lastOpened || 0 }))
+    .filter((r) => r.at)
+    .sort((a, b) => b.at - a.at)
+    .slice(0, RECENT_COUNT);
+  if (!recent.length) return '';
+  const items = recent.map(({ note, at }) => noteItem(note, `<span class="sub">${escapeHtml(ago(at))}</span>`)).join('');
+  return `<details open class="recent"><summary>Recent<span class="count">${recent.length}</span></summary><ul>${items}</ul></details>`;
+}
+
 function renderTree() {
   const groups = new Map();
   for (const note of vault.notes.values()) {
@@ -140,7 +154,7 @@ function renderResults(query) {
 
 function renderSidebar() {
   const query = $('search').value.trim();
-  $('sidebar-list').innerHTML = query ? renderResults(query) : renderTree();
+  $('sidebar-list').innerHTML = query ? renderResults(query) : renderRecent() + renderTree();
 }
 
 function setNav(open) {
