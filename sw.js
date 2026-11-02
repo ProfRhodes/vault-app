@@ -2,10 +2,11 @@
 // from the network first so updates show up right away, and the last copy is
 // kept for when there is no connection. GitHub API calls are never touched.
 
-const CACHE = 'vault-shell-v1';
+const CACHE = 'vault-shell-v2';
 const SHELL = [
   './',
   'index.html',
+  'help.md',
   'app.css',
   'app.js',
   'markdown.js',

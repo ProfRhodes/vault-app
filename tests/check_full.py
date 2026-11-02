@@ -82,6 +82,7 @@ def tap_node(page, path):
 def local_checks(browser, vault_dir):
     errors = []
     ctx = browser.new_context(viewport={"width": 1280, "height": 800}, service_workers="block")
+    ctx.add_init_script("localStorage.setItem('vault-welcomed', '1');")
     page = ctx.new_page()
     watch_errors(page, errors)
 
@@ -306,6 +307,7 @@ def voice_checks(browser, vault_dir):
     errors = []
     ctx = browser.new_context(viewport={"width": 390, "height": 844}, service_workers="block")
     ctx.add_init_script(FAKE_VOICE)
+    ctx.add_init_script("localStorage.setItem('vault-welcomed', '1');")
     page = ctx.new_page()
     watch_errors(page, errors)
     page.goto(BASE + "#/new/voice")
@@ -329,6 +331,7 @@ def voice_checks(browser, vault_dir):
 
     ctx = browser.new_context(viewport={"width": 390, "height": 844}, service_workers="block")
     ctx.add_init_script("delete window.SpeechRecognition; delete window.webkitSpeechRecognition;")
+    ctx.add_init_script("localStorage.setItem('vault-welcomed', '1');")
     page = ctx.new_page()
     page.goto(BASE + "#/new/voice")
     page.wait_for_selector("#ed-body")
@@ -398,7 +401,7 @@ def github_checks(browser):
     gh = FakeGitHub()
     ctx = browser.new_context(viewport={"width": 1280, "height": 800}, service_workers="block")
     ctx.add_init_script(
-        "localStorage.setItem('vault-settings', JSON.stringify({owner: 'me', repo: 'vault', branch: 'main', token: 'tok123'}));"
+        "localStorage.setItem('vault-settings', JSON.stringify({owner: 'me', repo: 'vault', branch: 'main', token: 'tok123'})); localStorage.setItem('vault-welcomed', '1');"
     )
     ctx.route("https://api.github.com/**", gh.handle)
     page = ctx.new_page()
@@ -463,11 +466,46 @@ def github_checks(browser):
     ctx.close()
 
 
+# ---------------------------------------------------------------- help
+
+def help_checks(browser):
+    errors = []
+    ctx = browser.new_context(viewport={"width": 390, "height": 844}, service_workers="block")
+    page = ctx.new_page()
+    watch_errors(page, errors)
+    page.goto(BASE)
+    page.wait_for_selector(".help h1")
+    check("first open shows the guide", page.evaluate("location.hash") == "#/help" and page.locator(".welcome").count() == 1)
+    sections = page.locator(".help h2").all_inner_texts()
+    check("guide covers every area", all(any(w in s for s in sections) for w in ["Getting set up", "Notes", "Voice", "graph", "Syncing", "Privacy", "Troubleshooting"]), str(sections))
+    check("graph views are explained", page.locator(".help h3").all_inner_texts()[:3] == ["Web", "Consolidation", "Memory wheel"])
+    page.click(".welcome a")
+    page.wait_for_selector(".markdown h1")
+    check("start button opens the vault", page.locator(".markdown h1").inner_text() == "Welcome to the vault")
+    page.reload()
+    page.wait_for_selector(".markdown h1")
+    check("guide does not pop up a second time", page.evaluate("location.hash") != "#/help")
+    page.click("#menu")
+    page.locator(".sidebar-foot a", has_text="Help").click()
+    page.wait_for_selector(".help h1")
+    check("Help in the menu opens the guide without the welcome", page.locator(".welcome").count() == 0)
+    page.goto(BASE + "#/graph/web")
+    wait_until(page, "window.__vault.graph && window.__vault.graph.nodes.length >= 11")
+    page.click("#graph-legend summary")
+    page.locator("#legend-body a", has_text="How to use the graph").click()
+    page.wait_for_selector("#h-the-graph")
+    top = page.evaluate("document.getElementById('h-the-graph').getBoundingClientRect().top")
+    check("Key links straight to the graph section", 0 <= top < 200, str(top))
+    check("no console errors in help checks", not errors, "; ".join(errors))
+    ctx.close()
+
+
 # ---------------------------------------------------------------- PWA
 
 def pwa_checks(browser):
     errors = []
     ctx = browser.new_context(viewport={"width": 390, "height": 844})
+    ctx.add_init_script("localStorage.setItem('vault-welcomed', '1');")
     page = ctx.new_page()
     watch_errors(page, errors)
     page.goto(BASE)
@@ -520,6 +558,7 @@ def main():
             local_checks(browser, vault_dir)
             voice_checks(browser, vault_dir)
             github_checks(browser)
+            help_checks(browser)
             pwa_checks(browser)
             browser.close()
         text_checks()

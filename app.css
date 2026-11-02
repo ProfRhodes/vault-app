@@ -413,6 +413,20 @@ mark { background: var(--mark); color: inherit; border-radius: 3px; padding: 0 2
 .settings h2 { margin-top: 28px; font-size: 1.1rem; }
 .settings li { margin: 4px 0; }
 
+/* ---------- help ---------- */
+
+.welcome {
+  margin-bottom: 20px;
+  padding: 14px 16px;
+  border: 1px solid var(--gold);
+  border-radius: 12px;
+  background: rgba(224, 184, 79, 0.08);
+}
+
+.welcome p { margin-top: 0; }
+.help h3 { color: var(--gold); }
+.help h2 { padding-top: 8px; border-top: 1px solid var(--border); }
+
 /* ---------- floating buttons ---------- */
 
 .fab {
@@ -442,7 +456,7 @@ mark { background: var(--mark); color: inherit; border-radius: 3px; padding: 0 2
 
 .fab-btn.primary { width: 60px; height: 60px; background: var(--gold); border-color: var(--gold); color: #1a1405; }
 
-body[data-view="editor"] .fab, body[data-view="settings"] .fab { display: none; }
+body[data-view="editor"] .fab, body[data-view="settings"] .fab, body[data-view="help"] .fab { display: none; }
 body[data-view="graph"] .fab { bottom: calc(18px + env(safe-area-inset-bottom)); }
 body[data-view="graph"] .graph-card { right: 92px; }
 

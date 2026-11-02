@@ -214,7 +214,8 @@ function renderLegend(layout) {
     groups.map((g) => `<li><span class="dot" data-group="${escapeHtml(g)}"></span>${escapeHtml(g)}</li>`).join('') +
     '<li><span class="swatch dim"></span>Dim: fading from memory (forgetting curve)</li>' +
     '<li><span class="swatch gold"></span>Gold, thicker: opened together often (Hebbian)</li>' +
-    '<li><span class="swatch dashed"></span>Dashed: learned link with no written link</li></ul>';
+    '<li><span class="swatch dashed"></span>Dashed: learned link with no written link</li></ul>' +
+    '<p class="legend-hint"><a href="#/help/the-graph">How to use the graph</a></p>';
   for (const dot of $('legend-body').querySelectorAll('.dot')) dot.style.background = groupColor(dot.dataset.group);
 }
 
@@ -424,6 +425,38 @@ function showSettings() {
   document.title = 'Settings | Vault';
 }
 
+// ---------- help ----------
+
+const WELCOMED_KEY = 'vault-welcomed';
+let helpText = null;
+
+async function showHelp(section) {
+  setView('help');
+  const firstRun = !localStorage.getItem(WELCOMED_KEY);
+  localStorage.setItem(WELCOMED_KEY, '1');
+  if (helpText === null) {
+    $('note').innerHTML = '<p class="empty">Loading the guide...</p>';
+    try {
+      const r = await fetch('help.md');
+      if (!r.ok) throw new Error(String(r.status));
+      helpText = await r.text();
+    } catch {
+      $('note').innerHTML = '<p class="error">The guide could not load. Check your connection and try again.</p>';
+      return;
+    }
+  }
+  const plain = { wikilink: (t, label) => label, mdlink: (u, label) => label };
+  const welcome = firstRun
+    ? '<div class="welcome"><p><strong>Welcome.</strong> Here is a quick guide to how the vault works. You can come back to it any time from Help in the menu.</p>' +
+      '<a class="btn primary" href="#/">Start using the vault</a></div>'
+    : '';
+  $('note').innerHTML = `${welcome}<article class="markdown help">${renderMarkdown(helpText, plain)}</article>`;
+  const target = section && document.getElementById('h-' + section);
+  if (target) target.scrollIntoView();
+  else $('note').scrollTop = 0;
+  document.title = 'Help | Vault';
+}
+
 // ---------- routing ----------
 
 function decode(s) {
@@ -460,6 +493,7 @@ function route() {
   const segs = pathPart.split('/').filter(Boolean);
   const params = new URLSearchParams(query || '');
   if (segs[0] === 'settings') return showSettings();
+  if (segs[0] === 'help') return showHelp(segs[1]);
   if (!loaded) return;
   if (segs[0] === 'note') return showNote(decode(segs[1] || '') || HOME);
   if (segs[0] === 'graph') return showGraph(segs[1], params.get('focus'));
@@ -539,7 +573,9 @@ async function start() {
   loaded = true;
   state.seen([...vault.notes.keys()]);
   renderSidebar();
-  route();
+  // First open on this device: show the guide once, as a short tutorial.
+  if (!localStorage.getItem(WELCOMED_KEY) && ['', '#', '#/'].includes(location.hash)) location.hash = '#/help';
+  else route();
 }
 
 start();

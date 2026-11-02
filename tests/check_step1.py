@@ -29,6 +29,7 @@ def open_note(page, path):
 with sync_playwright() as p:
     browser = p.chromium.launch()
     page = browser.new_page(viewport={"width": 1280, "height": 800})
+    page.add_init_script("localStorage.setItem('vault-welcomed', '1');")
     errors = []
     page.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
     page.on("pageerror", lambda e: errors.append(str(e)))
@@ -100,6 +101,7 @@ with sync_playwright() as p:
     check("javascript: links are dropped", "javascript:" not in hostile.split("&")[0] and 'href="javascript' not in hostile, hostile)
 
     mobile = browser.new_page(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True)
+    mobile.add_init_script("localStorage.setItem('vault-welcomed', '1');")
     mobile.goto(BASE + "#/note/notes%2Fplans%2Fmemory-wheel-view.md")
     mobile.wait_for_selector(".markdown")
     mobile.wait_for_timeout(300)

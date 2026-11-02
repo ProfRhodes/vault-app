@@ -155,7 +155,9 @@ export function renderMarkdown(body, ctx) {
     const h = line.match(HEADING);
     if (h) {
       const n = h[1].length;
-      out.push(`<h${n}>${inline(h[2].replace(/\s+#+\s*$/, ''), ctx)}</h${n}>`);
+      const text = h[2].replace(/\s+#+\s*$/, '');
+      const id = 'h-' + text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+      out.push(`<h${n} id="${id}">${inline(text, ctx)}</h${n}>`);
       i++;
       continue;
     }
