@@ -2,7 +2,7 @@
 // from the network first so updates show up right away, and the last copy is
 // kept for when there is no connection. GitHub API calls are never touched.
 
-const CACHE = 'vault-shell-v2';
+const CACHE = 'vault-shell-v3';
 const SHELL = [
   './',
   'index.html',
@@ -18,6 +18,9 @@ const SHELL = [
   'manifest.webmanifest',
   'icons/icon-192.png',
   'icons/icon-512.png',
+  'fonts/IMFellEnglish.ttf',
+  'fonts/Cinzel.ttf',
+  'fonts/Inter.ttf',
 ];
 
 self.addEventListener('install', (event) => {

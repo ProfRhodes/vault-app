@@ -23,9 +23,9 @@ If you leave the editor with unsaved changes, the app asks first.
 
 ## Voice notes
 
-Tap the **gold mic**. A new voice note opens and starts listening right away. Speak naturally, and the words appear as you talk. Tap **Stop** when you are done, then **Save**.
+Tap **+**, then **Speak** under the text box. Speak naturally, and the words appear as you talk. Tap **Stop** when you are done, then **Save**.
 
-In an open editor, **Speak** adds dictation wherever the cursor is.
+**Speak** works in any open editor and adds dictation wherever the cursor is.
 
 Chrome asks for the microphone the first time. Speech is turned into text by Google, so it needs a connection.
 
