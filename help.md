@@ -33,16 +33,16 @@ Chrome asks for the microphone the first time. Speech is turned into text by Goo
 
 Every note belongs to one of the ten sefirot of the Tree of Life, chosen by meaning. Its sign shows faintly behind the note's title, and its name sits at the top of the note.
 
-- **Keter**, purpose: goals, the big why
-- **Chokhmah**, sparks: raw ideas
-- **Binah**, study: research and plans given structure
-- **Chesed**, giving: generosity and wealth
-- **Gevurah**, strength: exercise, discipline, rules for Claude
-- **Tiferet**, teaching: lessons, and the self
-- **Netzach**, art: content, design, games
-- **Hod**, learning: what you study, science, code
-- **Yesod**, dreams: imagination and memory, including Claude's memory files
-- **Malkhut**, speech: public speaking and daily life
+- **Keter**, purpose and goals: the big why
+- **Chokhmah**, raw ideas: first sparks
+- **Binah**, research and plans: sources turned into structure
+- **Chesed**, wealth and giving: income, generosity
+- **Gevurah**, strength and rules: exercise, discipline, rules for Claude
+- **Tiferet**, teaching and self: what you give as a teacher, and reflection
+- **Netzach**, art and play: content, design, games
+- **Hod**, learning and code: what you take in as a student, science, code
+- **Yesod**, dreams and memory: imagination, and Claude's memory files
+- **Malkhut**, speech and daily life: public speaking, bills, errands
 
 **How a note gets its sefirah:** a line at the top of the note decides, inside the `---` frontmatter, like `sephira: hod`. Add a second after a comma: `sephira: hod, tiferet`. Without that line, the note's folder decides. The folder lists, and the instructions AI agents follow when they tag what they write, live in `.vault/sefirot.json` in the vault.
 
