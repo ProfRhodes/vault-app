@@ -153,9 +153,10 @@ export class Vault {
     return path;
   }
 
-  async create(title, body, folder = 'notes') {
+  // front is optional frontmatter (with its --- lines), placed above the title.
+  async create(title, body, folder = 'notes', front = '') {
     const path = this.freePath(folder, title);
-    const text = `# ${title.trim()}\n\n${body.trim()}\n`;
+    const text = `${front}# ${title.trim()}\n\n${body.trim()}\n`;
     return this.write(path, text);
   }
 

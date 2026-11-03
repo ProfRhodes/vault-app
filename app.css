@@ -471,6 +471,8 @@ mark { background: var(--mark); color: inherit; border-radius: var(--radius); pa
 .card-title { display: flex; align-items: center; gap: 8px; font: 24px/1.2 var(--font-title); color: var(--ivory); }
 .card-meta { color: var(--muted); font-size: 14px; }
 .card-actions { display: flex; gap: 8px; margin-top: 16px; }
+.mass-list { max-height: 40vh; overflow-y: auto; margin: 8px 0 0; padding: 0; list-style: none; }
+.mass-list a { display: flex; align-items: center; min-height: 48px; color: var(--link); text-decoration: none; overflow-wrap: anywhere; }
 .card-hint { margin: 8px 0 0; color: var(--muted); font-size: 14px; }
 
 /* ---------- editor ---------- */
@@ -506,6 +508,38 @@ mark { background: var(--mark); color: inherit; border-radius: var(--radius); pa
 .ed-title:focus, .ed-body:focus, .settings input:focus { outline: 2px solid var(--focus); outline-offset: -1px; }
 
 .ed-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+.ed-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.ed-head .crumbs { min-width: 0; overflow-wrap: anywhere; }
+
+/* Sefirah picker: a sheet from the bottom of the screen. */
+.sef-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  max-height: 75vh;
+  overflow-y: auto;
+  padding: 0 16px calc(16px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--field);
+  background: var(--panel);
+  box-shadow: 0 -8px 24px oklch(0 0 0 / 0.5);
+}
+
+.sheet-head {
+  position: sticky;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+  background: var(--panel);
+}
+
+.sheet-head h2 { margin: 0; font: 17px var(--font-head); letter-spacing: 0.06em; color: var(--ivory); }
+.sef-sheet h3 { margin: 16px 0 4px; font: 14px var(--font-head); letter-spacing: 0.08em; color: var(--muted); }
+.sef-sheet .sug[aria-checked="true"] { background: var(--panel-2); box-shadow: inset 2px 0 0 var(--text); }
 
 /* Link suggestions: sit just above the keyboard, or the text box's bottom. */
 .suggest {

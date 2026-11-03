@@ -44,7 +44,7 @@ Every note belongs to one of the ten sefirot of the Tree of Life, chosen by mean
 - **Yesod**, dreams and memory: imagination, and Claude's memory files
 - **Malkhut**, speech and daily life: public speaking, bills, errands
 
-**How a note gets its sefirah:** a line at the top of the note decides, inside the `---` frontmatter, like `sephira: hod`. Add a second after a comma: `sephira: hod, tiferet`. Without that line, the note's folder decides. The folder lists, and the instructions AI agents follow when they tag what they write, live in `.vault/sefirot.json` in the vault.
+**How a note gets its sefirah:** in the editor, tap **Sefirah** and pick one, plus an optional second. That writes a line at the top of the note, which decides, inside the `---` frontmatter, like `sephira: hod`. Add a second after a comma: `sephira: hod, tiferet`. Without that line, the note's folder decides. The folder lists, and the instructions AI agents follow when they tag what they write, live in `.vault/sefirot.json` in the vault.
 
 **Yours or the AI's:** notes in the notes folder and the Roblox game are yours. Everything else counts as written by AI. A line `author: me` or `author: ai` at the top changes that.
 
@@ -68,7 +68,7 @@ After Giordano Bruno's memory wheels. Each top folder is a wheel, and every note
 
 ### Tree
 
-The Tree of Life, with the 22 paths between the sefirot. Every note gathers at its sefirah, and each sefirah shows how many notes it holds. Binah, Gevurah and Hod are on your left, as the Zohar places them on the body. Notes with no sefirah yet wait beside Malkhut as **Unsorted**.
+The Tree of Life, with the 22 paths between the sefirot. Every note gathers at its sefirah, and each sefirah shows how many notes it holds. Binah, Gevurah and Hod are on your left, as the Zohar places them on the body. Notes with no sefirah yet wait beside Malkhut as **Unsorted**. When a sefirah holds many notes, only its strongest show as dots; the rest, the ones fading from memory, merge into a solid disc in its color. Zoom in to see more of them as dots, or tap the disc to list them.
 
 ### On every view
 

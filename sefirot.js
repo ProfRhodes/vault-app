@@ -154,6 +154,37 @@ export function classify(note, folders) {
   return { sefirah, second, author };
 }
 
+const FRONT = /^---\r?\n([\s\S]*?)\r?\n---[ \t]*(\r?\n|$)/;
+const SEPH_LINE = /^\s*(sephira|sefirah)\s*:/i;
+
+export const sephiraValue = (main, second) => (main ? (second && second !== main ? `${main}, ${second}` : main) : '');
+
+// The note's sephira line as [main, second], read from its raw text.
+export function readSephira(text) {
+  const m = String(text).match(FRONT);
+  if (!m) return [null, null];
+  const line = m[1].split(/\r?\n/).find((l) => SEPH_LINE.test(l));
+  if (!line) return [null, null];
+  const words = line.replace(SEPH_LINE, '').split(/[,;/]+/).map(sefirahKey).filter(Boolean);
+  return [words[0] || null, words.find((w) => w !== words[0]) || null];
+}
+
+// Sets, replaces or removes the sephira line in a note's frontmatter, adding
+// the frontmatter block when the note has none.
+export function writeSephira(text, main, second) {
+  const value = sephiraValue(main, second);
+  const m = String(text).match(FRONT);
+  if (!m) return value ? `---\nsephira: ${value}\n---\n\n${text}` : text;
+  const lines = m[1].split(/\r?\n/);
+  const at = lines.findIndex((l) => SEPH_LINE.test(l));
+  if (value && at >= 0) lines[at] = `sephira: ${value}`;
+  else if (value) lines.push(`sephira: ${value}`);
+  else if (at >= 0) lines.splice(at, 1);
+  const rest = text.slice(m[0].length);
+  if (!lines.some((l) => l.trim())) return rest.replace(/^\r?\n/, '');
+  return `---\n${lines.join('\n')}\n---${m[2] || '\n'}${rest}`;
+}
+
 export function glyphSvg(key, size = 24, color = 'currentColor', width = 1.6) {
   const s = BY_KEY.get(key);
   if (!s) return '';

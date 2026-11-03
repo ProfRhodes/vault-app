@@ -7,7 +7,7 @@ import { VaultState } from './state.js';
 import { GraphView, sefirahColor, orderGroups, LAYOUTS } from './graph.js';
 import { Dictation, voiceSupported } from './voice.js';
 import { renderMarkdown, escapeHtml, unescapeHtml } from './markdown.js';
-import { SEFIROT, BY_KEY, SEFIROT_PATH, glyphSvg } from './sefirot.js';
+import { SEFIROT, BY_KEY, SEFIROT_PATH, glyphSvg, readSephira, writeSephira, sephiraValue } from './sefirot.js';
 
 const HOME = 'notes/welcome.md';
 const SETTINGS_KEY = 'vault-settings';
@@ -389,6 +389,23 @@ function showCard(node) {
   card.hidden = false;
 }
 
+// Tapping a sefirah's disc on the Tree lists the notes merged into it,
+// strongest first.
+function showMass(key) {
+  const card = $('graph-card');
+  const sef = BY_KEY.get(key);
+  const nodes = graph.massedNodes(key);
+  const icon = sef ? glyphSvg(sef.key, 24, sef.outline || sef.color, 2) : '<span class="dot none"></span>';
+  const name = sef ? `${sef.name} &middot; ${escapeHtml(sef.short)}` : 'Unsorted';
+  card.innerHTML =
+    `<div class="card-title">${icon}${name}</div>` +
+    `<div class="card-meta">${plural(nodes.length, 'more note')} merged into the disc. Zoom in to see them as dots.</div>` +
+    `<ul class="mass-list">${nodes.map((n) => `<li><a href="${noteHref(n.path)}">${escapeHtml(n.title)}</a></li>`).join('')}</ul>` +
+    '<div class="card-actions"><button class="btn ghost" type="button" data-close>Close</button></div>';
+  card.querySelector('[data-close]').addEventListener('click', () => (card.hidden = true));
+  card.hidden = false;
+}
+
 function showAligned(list) {
   const box = $('graph-aligned');
   if (!graph || graph.layout !== 'wheel' || !list.length) {
@@ -412,6 +429,7 @@ function showGraph(layout, focus) {
       onSelect: showCard,
       onOpen: (path) => (location.hash = noteHref(path)),
       onAligned: showAligned,
+      onMass: showMass,
     });
     graph.filter = (n) => !isHidden(n);
   }
@@ -447,7 +465,7 @@ function showEditor({ path = null, voice = false }) {
   const heading = note ? `Editing ${escapeHtml(path)}` : voice ? 'New voice note' : 'New note';
   $('note').innerHTML = `
     <div class="editor">
-      <div class="crumbs">${heading}</div>
+      <div class="ed-head"><div class="crumbs">${heading}</div><button id="ed-sef" class="btn" type="button" aria-haspopup="dialog">Sefirah</button></div>
       ${note ? '' : '<input id="ed-title" class="ed-title" type="text" placeholder="Title" autocomplete="off" aria-label="Title">'}
       <textarea id="ed-body" class="ed-body" spellcheck="true" aria-label="Note text" placeholder="Write here, or tap Speak. Link notes with [[note name]]."></textarea>
       <div class="ed-bar">
@@ -482,6 +500,7 @@ function showEditor({ path = null, voice = false }) {
   }
   $('ed-save').addEventListener('click', saveEditor);
   wireSuggestions(ta, path, markDirty);
+  wireSefirahPicker(ta, Boolean(note), markDirty);
   document.title = `${note ? 'Edit' : 'New note'} | Vault`;
   if (voice || !note) ta.setSelectionRange(ta.value.length, ta.value.length);
   if (voice && voiceSupported) {
@@ -489,6 +508,78 @@ function showEditor({ path = null, voice = false }) {
     dictation.start();
   } else if (note) ta.focus();
   else title.focus();
+}
+
+// ---------- sefirah picker ----------
+// Writes the note's sephira line. An existing note's line changes in the text
+// right away, where you can see it; a new note gets it when saved.
+
+function wireSefirahPicker(ta, existing, markDirty) {
+  const button = $('ed-sef');
+  let [main, second] = existing ? readSephira(ta.value) : [null, null];
+  editor.sefirah = () => [main, second];
+
+  const label = () => {
+    const s = BY_KEY.get(main);
+    button.innerHTML = s ? `${glyphSvg(s.key, 20, s.outline || s.color, 2)}${escapeHtml(s.name)}` : 'Sefirah';
+  };
+  label();
+
+  const sheet = document.createElement('div');
+  sheet.className = 'sef-sheet';
+  sheet.id = 'ed-sef-sheet';
+  sheet.setAttribute('role', 'dialog');
+  sheet.setAttribute('aria-label', 'Choose a sefirah');
+  sheet.hidden = true;
+  button.closest('.editor').append(sheet);
+
+  const row = (group, key, picked) => {
+    const s = BY_KEY.get(key);
+    const icon = s ? glyphSvg(s.key, 24, s.outline || s.color, 2) : '<span class="t-icon"></span>';
+    const text = s ? `<span class="sug-title">${escapeHtml(s.name)}</span><span class="sub">${escapeHtml(s.short)}</span>` : '<span class="sug-title">None</span>';
+    return `<button type="button" class="sug" role="radio" aria-checked="${picked}" data-group="${group}" data-key="${key || ''}">${icon}<span class="sug-text">${text}</span></button>`;
+  };
+
+  const draw = () => {
+    const list = (group, current, skip) =>
+      [null, ...SEFIROT.map((s) => s.key)].filter((k) => !k || k !== skip).map((k) => row(group, k, (current || null) === k)).join('');
+    sheet.innerHTML =
+      '<div class="sheet-head"><h2>Sefirah</h2><button type="button" class="btn primary" data-done>Done</button></div>' +
+      `<div role="radiogroup" aria-label="Main sefirah">${list('main', main, null)}</div>` +
+      (main ? `<h3>Second, optional</h3><div role="radiogroup" aria-label="Second sefirah">${list('second', second, main)}</div>` : '');
+    for (const b of sheet.querySelectorAll('.sug')) {
+      b.addEventListener('click', () => {
+        const key = b.dataset.key || null;
+        if (b.dataset.group === 'main') {
+          main = key;
+          if (!main || second === main) second = null;
+        } else second = key;
+        if (existing) ta.value = writeSephira(ta.value, main, second);
+        markDirty();
+        label();
+        draw();
+        const again = sheet.querySelector(`.sug[data-group="${b.dataset.group}"][data-key="${b.dataset.key}"]`);
+        if (again) again.focus();
+      });
+    }
+    sheet.querySelector('[data-done]').addEventListener('click', () => {
+      sheet.hidden = true;
+      button.focus();
+    });
+  };
+
+  button.addEventListener('click', () => {
+    draw();
+    sheet.hidden = false;
+    const picked = sheet.querySelector('.sug[aria-checked="true"]');
+    (picked || sheet.querySelector('.sug')).focus();
+  });
+  sheet.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      sheet.hidden = true;
+      button.focus();
+    }
+  });
 }
 
 // ---------- link suggestions ----------
@@ -638,7 +729,9 @@ async function saveEditor() {
       path = await vault.write(ed.path, $('ed-body').value);
     } else {
       const title = $('ed-title').value.trim() || `Note ${stamp(new Date())}`;
-      path = await vault.create(title, $('ed-body').value);
+      const [main, second] = ed.sefirah ? ed.sefirah() : [null, null];
+      const front = main ? `---\nsephira: ${sephiraValue(main, second)}\n---\n\n` : '';
+      path = await vault.create(title, $('ed-body').value, 'notes', front);
       state.seen([path]);
     }
     ed.dirty = false;

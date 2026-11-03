@@ -46,6 +46,9 @@ const TREE = {
   none: [-330, 1480],
 };
 const TREE_R = 44;
+// Dots shown per sefirah at the fitted zoom; zooming in shows more. The rest
+// merge into a solid disc, weakest memories first.
+const TREE_CAP = 40;
 const TREE_PATHS = [
   ['keter', 'chokhmah'], ['keter', 'binah'], ['keter', 'tiferet'], ['chokhmah', 'binah'], ['chokhmah', 'chesed'],
   ['chokhmah', 'tiferet'], ['binah', 'gevurah'], ['binah', 'tiferet'], ['chesed', 'gevurah'], ['chesed', 'tiferet'],
@@ -142,12 +145,14 @@ export function orderGroups(groups) {
 }
 
 export class GraphView {
-  constructor(canvas, { onSelect, onOpen, onAligned } = {}) {
+  constructor(canvas, { onSelect, onOpen, onAligned, onMass } = {}) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
     this.onSelect = onSelect || (() => {});
     this.onOpen = onOpen || (() => {});
     this.onAligned = onAligned || (() => {});
+    this.onMass = onMass || (() => {});
+    this.treeGroups = new Map();
     this.nodes = [];
     this.byPath = new Map();
     this.edges = [];
@@ -260,13 +265,19 @@ export class GraphView {
       by.get(k).push(n);
     }
     this.treeCounts = new Map([...by].map(([k, list]) => [k, list.length]));
+    this.treeGroups = new Map();
+    for (const n of this.nodes) n.rank = -1;
     for (const [k, list] of by) {
       const [cx, cy] = TREE[k];
-      list.sort((p, q) => hash(p.path) - hash(q.path));
+      // Strongest memories sit nearest their sefirah; the weakest are the
+      // first to merge into its disc.
+      list.sort((p, q) => q.strength - p.strength || q.degree - p.degree || hash(p.path) - hash(q.path));
       const start = k === 'none' ? 8 : TREE_R + 12;
       // Big sefirot pack tighter so a crowded one stays clear of its neighbors.
       const step = list.length > 120 ? 7 : 9;
+      this.treeGroups.set(k, { cx, cy, start, step, list });
       list.forEach((n, i) => {
+        n.rank = i;
         const r = start + step * Math.sqrt(i + 1);
         const t = i * 2.39996;
         n.tx = cx + r * Math.cos(t);
@@ -542,6 +553,7 @@ export class GraphView {
     const pad = 40;
     const s = Math.min(4, Math.max(0.05, Math.min(this.w / (maxX - minX + pad * 2), this.h / (maxY - minY + pad * 2))));
     const target = { x: (minX + maxX) / 2, y: (minY + maxY) / 2, s };
+    if (this.layout === 'tree') this.treeFit = s;
     if (instant || !this.fitted) this.cam = target;
     else this.camTarget = target;
     this.fitted = true;
@@ -560,10 +572,49 @@ export class GraphView {
     return n ? this.toScreen(n.x, n.y) : null;
   }
 
+  // How many dots each sefirah shows at the current zoom.
+  treeCap() {
+    const fit = this.treeFit || this.cam.s;
+    return Math.max(TREE_CAP, Math.floor(TREE_CAP * Math.pow(this.cam.s / fit, 2)));
+  }
+
+  massed(n) {
+    return this.layout === 'tree' && n.rank >= this.treeCap();
+  }
+
+  // Ring of world space a sefirah's disc covers, or null when nothing is merged.
+  massRing(k) {
+    const g = this.treeGroups.get(k);
+    const cap = this.treeCap();
+    if (!g || g.list.length <= cap) return null;
+    const inner = g.start + g.step * Math.sqrt(cap + 0.5);
+    // At least about 24 px wide on screen, so it can always be tapped.
+    const outer = Math.max(g.start + g.step * Math.sqrt(g.list.length) + 5, inner + 24 / this.cam.s);
+    return { g, inner, outer, hidden: g.list.length - cap };
+  }
+
+  massAt(sx, sy) {
+    if (this.layout !== 'tree') return null;
+    const [x, y] = this.toWorld(sx, sy);
+    for (const k of this.treeGroups.keys()) {
+      const m = this.massRing(k);
+      if (!m) continue;
+      const d = Math.hypot(x - m.g.cx, y - m.g.cy);
+      if (d >= m.inner && d <= m.outer + 4) return k;
+    }
+    return null;
+  }
+
+  massedNodes(k) {
+    const g = this.treeGroups.get(k);
+    return g ? g.list.slice(this.treeCap()) : [];
+  }
+
   hit(sx, sy) {
     let best = null;
     let bestD = 18;
     for (const n of this.nodes) {
+      if (this.massed(n)) continue;
       const [x, y] = this.toScreen(n.x, n.y);
       const d = Math.hypot(x - sx, y - sy) - n.radius * this.cam.s;
       if (d < bestD) {
@@ -661,8 +712,10 @@ export class GraphView {
         }
         return;
       }
-      const n = this.hit(g.x, g.y);
-      if (!n) this.clearSelection();
+      const mass = this.massAt(g.x, g.y);
+      const n = mass ? null : this.hit(g.x, g.y);
+      if (mass) this.onMass(mass);
+      else if (!n) this.clearSelection();
       else if (this.selected === n) this.onOpen(n.path);
       else this.select(n.path);
     };
@@ -769,7 +822,10 @@ export class GraphView {
     ctx.setTransform(this.dpr * s, 0, 0, this.dpr * s, this.dpr * (this.w / 2 - this.cam.x * s), this.dpr * (this.h / 2 - this.cam.y * s));
     if (this.layout === 'rings') this.drawRings(ctx, s);
     if (this.layout === 'wheel') this.drawWheels(ctx, s);
-    if (this.layout === 'tree') this.drawTree(ctx, s);
+    if (this.layout === 'tree') {
+      this.drawTree(ctx, s);
+      this.drawMasses(ctx, s);
+    }
 
     const acts = new Map();
     for (const n of this.act.keys()) acts.set(n, this.actAt(n, t));
@@ -778,6 +834,7 @@ export class GraphView {
     // On the Tree the sefirot paths carry the structure, so note links stay quieter.
     const quiet = this.layout === 'tree' ? 0.45 : 1;
     for (const e of this.edges) {
+      if (this.massed(e.a) || this.massed(e.b)) continue;
       const fade = Math.min(e.a.strength, e.b.strength) * quiet;
       const width = (1 + Math.log2(1 + e.w) * 1.3) / s;
       ctx.lineWidth = width;
@@ -797,6 +854,7 @@ export class GraphView {
     ctx.setLineDash([]);
 
     for (const n of this.nodes) {
+      if (this.massed(n)) continue;
       const a = actOf(n);
       const r = Math.max(n.radius, 2.2 / s);
       if (a > 0.02) {
@@ -836,6 +894,7 @@ export class GraphView {
     const picks = [];
     const neighbors = this.selected ? new Set(this.adj.get(this.selected)) : new Set();
     for (const n of this.nodes) {
+      if (this.massed(n)) continue;
       let p = 0;
       if (n === this.selected || n === this.hovered) p = 3;
       else if (neighbors.has(n)) p = 2;
@@ -927,6 +986,33 @@ export class GraphView {
       ctx.fillText(w.group.toUpperCase(), 0, w.inner + (w.outer - w.inner) / 2 + 0.5);
     }
     ctx.textAlign = 'left';
+  }
+
+  // Each crowded sefirah's weaker notes as one solid disc in its color.
+  drawMasses(ctx, s) {
+    for (const k of this.treeGroups.keys()) {
+      const m = this.massRing(k);
+      if (!m) continue;
+      const sef = BY_KEY.get(k);
+      const { cx, cy } = m.g;
+      ctx.beginPath();
+      ctx.arc(cx, cy, m.outer, 0, Math.PI * 2);
+      ctx.arc(cx, cy, Math.max(TREE_R, m.inner - 6), 0, Math.PI * 2, true);
+      const grad = ctx.createRadialGradient(cx, cy, m.inner, cx, cy, m.outer);
+      const c = sef ? (sef.quarters ? sef.quarters[0] : sef.color) : NONE_COLOR;
+      grad.addColorStop(0, c + '26');
+      grad.addColorStop(0.35, c + '8c');
+      grad.addColorStop(1, c + 'b3');
+      ctx.fillStyle = grad;
+      ctx.fill();
+      if (sef && sef.outline) {
+        ctx.lineWidth = 1.2 / s;
+        ctx.strokeStyle = sef.outline;
+        ctx.beginPath();
+        ctx.arc(cx, cy, m.outer, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
   }
 
   // The 22 paths go under the notes.
