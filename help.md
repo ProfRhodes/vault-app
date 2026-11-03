@@ -14,7 +14,7 @@ The token stays on this device and is only sent to GitHub. Each device needs it 
 
 - **Open the menu** with the button at the top left to see every note, grouped by folder.
 - **Search** with the box at the top. Every word you type must appear in the note, and title matches come first.
-- **Links:** write `[[note name]]` to link to another note. Gold links go to a note. Grey dashed links point to a note that does not exist yet.
+- **Links:** write `[[note name]]` to link to another note. As soon as you type `[[`, up to four notes appear above the keyboard, the ones you opened most recently first. Keep typing to narrow them, and tap one to write its link. Gold links go to a note. Grey dashed links point to a note that does not exist yet.
 - **Backlinks** at the bottom of every note list the notes that link to it, so connections work both ways.
 - **Edit** with the button at the top of a note. You see the raw text, including any frontmatter at the top of memory files.
 - **New note:** tap **+**. It is saved in the notes folder, named after its title.
@@ -29,9 +29,28 @@ Tap **+**, then **Speak** under the text box. Speak naturally, and the words app
 
 Chrome asks for the microphone the first time. Speech is turned into text by Google, so it needs a connection.
 
+## The ten sefirot
+
+Every note belongs to one of the ten sefirot of the Tree of Life, chosen by meaning. Its sign shows faintly behind the note's title, and its name sits at the top of the note.
+
+- **Keter**, purpose: goals, the big why
+- **Chokhmah**, sparks: raw ideas
+- **Binah**, study: research and plans given structure
+- **Chesed**, giving: generosity and wealth
+- **Gevurah**, strength: exercise, discipline, rules for Claude
+- **Tiferet**, teaching: lessons, and the self
+- **Netzach**, art: content, design, games
+- **Hod**, learning: what you study, science, code
+- **Yesod**, dreams: imagination and memory, including Claude's memory files
+- **Malkhut**, speech: public speaking and daily life
+
+**How a note gets its sefirah:** a line at the top of the note decides, inside the `---` frontmatter, like `sephira: hod`. Add a second after a comma: `sephira: hod, tiferet`. Without that line, the note's folder decides. The folder lists, and the instructions AI agents follow when they tag what they write, live in `.vault/sefirot.json` in the vault.
+
+**Yours or the AI's:** notes in the notes folder and the Roblox game are yours. Everything else counts as written by AI. A line `author: me` or `author: ai` at the top changes that.
+
 ## The graph
 
-Tap the circle button at the top right. Every note is a dot, colored by its top folder. Three views, each modeled on how memory works in the brain:
+Tap the circle button at the top right. Every note is a dot in its sefirah's color. **A filled dot is a note you wrote; a ring is one an AI wrote.** Zoom in and each dot shows its sign. Four views, the first three modeled on how memory works in the brain:
 
 ### Web
 
@@ -47,11 +66,16 @@ New memories live briefly in the **hippocampus** and are gradually moved to the 
 
 After Giordano Bruno's memory wheels. Each top folder is a wheel, and every note keeps a fixed slot, so you learn where things are. **Drag a wheel to turn it.** The notes lined up under the gold pointer are listed at the top: Bruno turned his wheels to combine ideas, and those are your combination. Tap one to select it.
 
+### Tree
+
+The Tree of Life, with the 22 paths between the sefirot. Every note gathers at its sefirah, and each sefirah shows how many notes it holds. Binah, Gevurah and Hod are on your left, as the Zohar places them on the body. Notes with no sefirah yet wait beside Malkhut as **Unsorted**.
+
 ### On every view
 
 - **Fading notes** are ones you have not opened in a while. This is the **forgetting curve**: memories weaken without review, and each visit makes them last longer. Faded notes are good candidates to revisit or prune.
 - **Gold, thicker lines** connect notes you often open one after the other. This is **Hebbian learning**, "cells that fire together wire together". A **dashed** gold line means the app learned the connection even though no written link exists.
 - **Moving around:** drag to pan, pinch or scroll to zoom. **Key** at the bottom left explains the colors.
+- **Hiding:** open **Key** and use the **Show** list to hide any sefirah, your notes or the AI's, Claude's memory or the skills. Claude's memory and the skills start hidden. Hidden notes still turn up in search and links, and the Key says how many are hidden. Each device remembers its own choice.
 
 ## The memory line
 

@@ -179,6 +179,11 @@ export class GitHubSource {
     return out;
   }
 
+  // Whether the last listing included this file, so missing files cost no request.
+  has(path) {
+    return Boolean(this.shas && this.shas.has(path));
+  }
+
   async read(path) {
     const [text] = await this.readMany([path]);
     if (typeof text !== 'string') throw new GitHubError(`Could not read ${path}`, 404);

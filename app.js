@@ -4,9 +4,10 @@
 import { Vault, LocalSource } from './vault.js';
 import { GitHubSource } from './github.js';
 import { VaultState } from './state.js';
-import { GraphView, groupColor, orderGroups } from './graph.js';
+import { GraphView, sefirahColor, orderGroups, LAYOUTS } from './graph.js';
 import { Dictation, voiceSupported } from './voice.js';
 import { renderMarkdown, escapeHtml, unescapeHtml } from './markdown.js';
+import { SEFIROT, BY_KEY, SEFIROT_PATH, glyphSvg } from './sefirot.js';
 
 const HOME = 'notes/welcome.md';
 const SETTINGS_KEY = 'vault-settings';
@@ -17,7 +18,40 @@ const LAYOUT_HINTS = {
   web: 'Notes pulled together by their links. Tap a note to watch activation spread from it.',
   rings: 'Consolidation. New notes sit in the hippocampus at the center and drift out toward the cortex as they age.',
   wheel: 'Memory wheels, after Giordano Bruno. Every note keeps its slot. Drag a wheel to turn it; notes under the pointer combine.',
+  tree: 'The Tree of Life. Each note gathers at its sefirah. Binah, Gevurah and Hod are on your left, as in the Zohar.',
 };
+
+// ---------- what the graph hides ----------
+// Saved on each device. Claude's memory and the skills start hidden.
+
+const HIDE_KEY = 'vault-hidden';
+const HIDE_DEFAULT = ['folder:memory', 'folder:.claude'];
+
+function hiddenSet() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(HIDE_KEY));
+    return new Set(Array.isArray(saved) ? saved : HIDE_DEFAULT);
+  } catch {
+    return new Set(HIDE_DEFAULT);
+  }
+}
+
+function setHidden(key, hide) {
+  const set = hiddenSet();
+  if (hide) set.add(key);
+  else set.delete(key);
+  try {
+    localStorage.setItem(HIDE_KEY, JSON.stringify([...set]));
+  } catch {
+    // storage blocked; the choice lasts until the page reloads
+  }
+  hiddenNow = set;
+}
+
+let hiddenNow = hiddenSet();
+
+const isHidden = (note) =>
+  hiddenNow.has('sef:' + (note.sefirah || 'none')) || hiddenNow.has('author:' + note.author) || hiddenNow.has('folder:' + note.group);
 
 const $ = (id) => document.getElementById(id);
 
@@ -226,7 +260,16 @@ function showNote(path) {
   current = path;
   const line = memoryLine(note);
   state.recordOpen(path);
-  const crumbs = note.folder ? escapeHtml(note.folder.split('/').join(' / ')) : 'root';
+  const folderText = note.folder ? escapeHtml(note.folder.split('/').join(' / ')) : 'root';
+  const sef = BY_KEY.get(note.sefirah);
+  const second = BY_KEY.get(note.second);
+  const ink = sef ? sef.outline || sef.color : '';
+  const sefLabel = sef
+    ? `<span class="sef-label">${glyphSvg(sef.key, 16, ink, 2)}${escapeHtml(sef.name)} &middot; ${escapeHtml(sef.short)}` +
+      `${second ? ` &middot; ${escapeHtml(second.name)}` : ''}</span>`
+    : '';
+  const crumbs = sefLabel + `<span class="folder">${folderText}</span>`;
+  const sign = sef ? `<div class="note-sign" aria-hidden="true">${glyphSvg(sef.key, 112, ink, 1.1)}</div>` : '';
   const tag = note.meta.type ? `<span class="tag">${escapeHtml(note.meta.type)}</span>` : '';
   const title = note.hasH1 ? '' : `<h1>${escapeHtml(note.title)}</h1>`;
   const desc = note.meta.description ? `<p class="description">${escapeHtml(note.meta.description)}</p>` : '';
@@ -234,27 +277,93 @@ function showNote(path) {
     `<div class="note-actions"><a class="btn ghost" href="#/edit/${encodeURIComponent(path)}">Edit</a>` +
     `<a class="btn ghost" href="#/graph?focus=${encodeURIComponent(path)}">Show in graph</a></div>`;
   $('note').innerHTML =
+    sign +
     `<div class="note-head"><div class="crumbs">${crumbs}${tag}</div>${actions}</div>${title}${desc}` +
     `<article class="markdown">${renderMarkdown(note.body, linkCtx(path))}</article>` +
     `<p class="memory-line">${escapeHtml(line)}</p>` +
     renderBacklinks(note);
   $('note').scrollTop = 0;
+  placeSign();
   document.title = `${note.title} | Vault`;
   renderSidebar();
 }
 
+// The sign sits behind the title and never reaches the first line of text:
+// it is sized to the space between the top of the title and what follows it.
+function placeSign() {
+  const box = $('note');
+  const sign = box.querySelector('.note-sign');
+  const h1 = box.querySelector('h1');
+  if (!sign || !h1) return;
+  const next = h1.nextElementSibling || box.querySelector('.markdown');
+  const top = Math.max(0, h1.offsetTop - 24);
+  const limit = (next && next.offsetTop > h1.offsetTop ? next.offsetTop : h1.offsetTop + h1.offsetHeight + 24) - 8;
+  const size = Math.min(112, limit - top);
+  if (size < 48) {
+    sign.hidden = true;
+    return;
+  }
+  sign.style.top = `${top}px`;
+  sign.style.width = sign.style.height = `${size}px`;
+  const svg = sign.querySelector('svg');
+  svg.setAttribute('width', size);
+  svg.setAttribute('height', size);
+}
+
 // ---------- graph view ----------
 
+const CHECK =
+  '<svg class="check" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4" fill="none" stroke="currentColor" stroke-width="1.6"/>' +
+  '<path class="tick" d="M7 12.5l3.5 3.5L17 8.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+function toggleRow(key, icon, label, count) {
+  const shown = !hiddenNow.has(key);
+  return (
+    `<li><button type="button" class="toggle" data-hide="${escapeHtml(key)}" aria-pressed="${shown}">` +
+    `${CHECK}<span class="t-icon">${icon}</span><span class="t-label">${label}</span><span class="t-count">${count}</span></button></li>`
+  );
+}
+
 function renderLegend(layout) {
-  const groups = orderGroups(new Set([...vault.notes.values()].map((n) => n.group)));
+  const notes = [...vault.notes.values()];
+  const count = (pred) => notes.filter(pred).length;
+  const sefRows = SEFIROT.map((s) =>
+    toggleRow(`sef:${s.key}`, glyphSvg(s.key, 20, s.outline || s.color, 2), `${escapeHtml(s.name)} <span class="sub-inline">${escapeHtml(s.short)}</span>`, count((n) => n.sefirah === s.key))
+  );
+  const unsorted = count((n) => !n.sefirah);
+  if (unsorted) sefRows.push(toggleRow('sef:none', '<span class="dot none"></span>', 'Unsorted', unsorted));
+  const groupRows = [
+    ['folder:memory', "Claude's memory", count((n) => n.group === 'memory')],
+    ['folder:.claude', 'Skills', count((n) => n.group === '.claude')],
+  ]
+    .filter(([, , c]) => c)
+    .map(([key, label, c]) => toggleRow(key, '', label, c));
+  const hidden = graph ? graph.hiddenCount : 0;
   $('legend-body').innerHTML =
-    `<p class="legend-hint">${escapeHtml(LAYOUT_HINTS[layout])}</p><ul>` +
-    groups.map((g) => `<li><span class="dot" data-group="${escapeHtml(g)}"></span>${escapeHtml(g)}</li>`).join('') +
+    `<p class="legend-hint">${escapeHtml(LAYOUT_HINTS[layout])}</p>` +
+    `<p class="hidden-count">${hidden ? `${plural(hidden, 'note')} hidden. Search and links still find them.` : 'Nothing hidden.'}</p>` +
+    `<h3>Show</h3><ul class="show-list">${sefRows.join('')}</ul>` +
+    '<ul class="show-list">' +
+    toggleRow('author:user', '<span class="dot filled"></span>', 'Written by me', count((n) => n.author === 'user')) +
+    toggleRow('author:ai', '<span class="dot ring"></span>', 'Written by AI', count((n) => n.author === 'ai')) +
+    groupRows.join('') +
+    '</ul><h3>Lines</h3><ul>' +
     '<li><span class="swatch dim"></span>Dim: fading from memory (forgetting curve)</li>' +
     '<li><span class="swatch gold"></span>Gold, thicker: opened together often (Hebbian)</li>' +
     '<li><span class="swatch dashed"></span>Dashed: learned link with no written link</li></ul>' +
     '<p class="legend-hint"><a href="#/help/the-graph">How to use the graph</a></p>';
-  for (const dot of $('legend-body').querySelectorAll('.dot')) dot.style.background = groupColor(dot.dataset.group);
+  for (const btn of $('legend-body').querySelectorAll('.toggle')) {
+    btn.addEventListener('click', () => {
+      const key = btn.dataset.hide;
+      setHidden(key, btn.getAttribute('aria-pressed') === 'true');
+      graph.setData(vault, state);
+      renderLegend(graph.layout);
+      const again = [...$('legend-body').querySelectorAll('.toggle')].find((b) => b.dataset.hide === key);
+      if (again) again.focus();
+      showCard(graph.selected);
+      showAligned(graph.layout === 'wheel' ? graph.aligned() : []);
+    });
+  }
 }
 
 function showCard(node) {
@@ -265,14 +374,17 @@ function showCard(node) {
   }
   const info = state.info(node.path);
   const note = vault.notes.get(node.path);
+  const sef = BY_KEY.get(node.sefirah);
+  const icon = sef ? glyphSvg(sef.key, 24, sef.outline || sef.color, 2) : '<span class="dot none"></span>';
+  const where = sef ? `${sef.name} &middot; ${escapeHtml(sef.short)}` : 'Unsorted';
+  const who = node.author === 'user' ? 'yours' : 'AI-written';
   card.innerHTML =
-    `<div class="card-title"><span class="dot"></span>${escapeHtml(node.title)}</div>` +
-    `<div class="card-meta">${escapeHtml(node.group)} &middot; strength ${pct(node.strength)} &middot; ` +
+    `<div class="card-title">${icon}${escapeHtml(node.title)}</div>` +
+    `<div class="card-meta">${where} &middot; ${who} &middot; strength ${pct(node.strength)} &middot; ` +
     `${plural(note.links.length + note.backlinks.length, 'link')} &middot; opened ${ago(info.lastOpened)}</div>` +
     `<div class="card-actions"><a class="btn primary" href="${noteHref(node.path)}">Open</a>` +
     `<button class="btn ghost" type="button" data-close>Close</button></div>` +
     '<p class="card-hint">Tap the note again to open it.</p>';
-  card.querySelector('.dot').style.background = groupColor(node.group);
   card.querySelector('[data-close]').addEventListener('click', () => graph.clearSelection());
   card.hidden = false;
 }
@@ -287,7 +399,7 @@ function showAligned(list) {
     '<span class="aligned-head">At the pointer</span>' +
     list.map((a) => `<button type="button" class="chip" data-path="${escapeHtml(a.path)}">${escapeHtml(a.title)}</button>`).join('');
   for (const chip of box.querySelectorAll('.chip')) {
-    chip.style.borderColor = groupColor(vault.notes.get(chip.dataset.path).group);
+    chip.style.borderColor = sefirahColor(vault.notes.get(chip.dataset.path).sefirah);
     chip.addEventListener('click', () => graph.select(chip.dataset.path));
   }
   box.hidden = false;
@@ -301,8 +413,10 @@ function showGraph(layout, focus) {
       onOpen: (path) => (location.hash = noteHref(path)),
       onAligned: showAligned,
     });
+    graph.filter = (n) => !isHidden(n);
   }
-  const chosen = ['web', 'rings', 'wheel'].includes(layout) ? layout : localStorage.getItem(LAYOUT_KEY) || 'web';
+  const saved = localStorage.getItem(LAYOUT_KEY);
+  const chosen = LAYOUTS.includes(layout) ? layout : LAYOUTS.includes(saved) ? saved : 'web';
   localStorage.setItem(LAYOUT_KEY, chosen);
   graph.show();
   graph.layout = chosen;
@@ -311,7 +425,15 @@ function showGraph(layout, focus) {
   renderLegend(chosen);
   showAligned(chosen === 'wheel' ? graph.aligned() : []);
   if (focus && graph.byPath.has(focus)) graph.select(focus, { center: true });
-  else showCard(graph.selected);
+  else if (focus && vault.notes.has(focus)) {
+    const card = $('graph-card');
+    card.innerHTML =
+      `<div class="card-title">${escapeHtml(vault.notes.get(focus).title)}</div>` +
+      '<p class="card-meta">This note is hidden on the graph. Open Key and turn its group back on under Show.</p>' +
+      '<div class="card-actions"><button class="btn ghost" type="button" data-close>Close</button></div>';
+    card.querySelector('[data-close]').addEventListener('click', () => (card.hidden = true));
+    card.hidden = false;
+  } else showCard(graph.selected);
   document.title = 'Graph | Vault';
 }
 
@@ -359,6 +481,7 @@ function showEditor({ path = null, voice = false }) {
     mic.addEventListener('click', () => (dictation.listening ? dictation.stop() : dictation.start()));
   }
   $('ed-save').addEventListener('click', saveEditor);
+  wireSuggestions(ta, path, markDirty);
   document.title = `${note ? 'Edit' : 'New note'} | Vault`;
   if (voice || !note) ta.setSelectionRange(ta.value.length, ta.value.length);
   if (voice && voiceSupported) {
@@ -366,6 +489,140 @@ function showEditor({ path = null, voice = false }) {
     dictation.start();
   } else if (note) ta.focus();
   else title.focus();
+}
+
+// ---------- link suggestions ----------
+// Typing [[ opens up to four notes above the keyboard, recent ones first.
+// Picking one writes its file name, which is how the vault links notes.
+
+const OPEN_LINK = /\[\[([^\]\n]*)$/;
+
+function linkSuggestions(query) {
+  const q = query.trim().toLowerCase();
+  const scored = [];
+  for (const n of vault.notes.values()) {
+    const title = n.title.toLowerCase();
+    const base = n.base.toLowerCase();
+    if (q && !title.includes(q) && !base.includes(q)) continue;
+    const prefix = q && (title.startsWith(q) || base.startsWith(q)) ? 1 : 0;
+    scored.push({ n, prefix, at: state.info(n.path).lastOpened || 0 });
+  }
+  scored.sort((a, b) => b.prefix - a.prefix || b.at - a.at || a.n.title.localeCompare(b.n.title));
+  return scored.slice(0, 4).map((s) => s.n);
+}
+
+// The file name links the note, unless another note shares it; then the path does.
+// A new note has no path yet; it will be saved in notes/, so links resolve from there.
+function linkTarget(note, fromPath) {
+  return vault.resolve(note.base, fromPath || 'notes/new.md') === note.path ? note.base : note.path.replace(/\.md$/i, '');
+}
+
+function wireSuggestions(ta, fromPath, markDirty) {
+  const box = document.createElement('div');
+  box.className = 'suggest';
+  box.id = 'ed-suggest';
+  box.setAttribute('role', 'listbox');
+  box.setAttribute('aria-label', 'Link to a note');
+  box.hidden = true;
+  ta.after(box);
+  let items = [];
+  let active = 0;
+
+  const place = () => {
+    const vv = window.visualViewport;
+    const visibleBottom = vv ? vv.offsetTop + vv.height : window.innerHeight;
+    const r = ta.getBoundingClientRect();
+    box.style.left = `${Math.max(8, r.left)}px`;
+    box.style.width = `${Math.min(r.width, window.innerWidth - 16)}px`;
+    // Below the top bar, so it never sits on the line being typed near the keyboard.
+    const visibleTop = (vv ? vv.offsetTop : 0) + 64;
+    box.style.top = `${Math.min(Math.max(visibleTop, r.top), visibleBottom - box.offsetHeight - 8)}px`;
+  };
+
+  const close = () => {
+    box.hidden = true;
+    items = [];
+  };
+
+  const pick = (note) => {
+    const pos = ta.selectionStart;
+    const before = ta.value.slice(0, pos);
+    const m = before.match(OPEN_LINK);
+    if (!m) return close();
+    const start = pos - m[1].length;
+    let after = ta.value.slice(pos);
+    if (after.startsWith(']]')) after = after.slice(2);
+    const target = linkTarget(note, fromPath);
+    ta.value = ta.value.slice(0, start) + target + ']]' + after;
+    const caret = start + target.length + 2;
+    ta.setSelectionRange(caret, caret);
+    markDirty();
+    close();
+    ta.focus();
+  };
+
+  const draw = () => {
+    box.innerHTML = items
+      .map((n, i) => {
+        const sef = BY_KEY.get(n.sefirah);
+        const icon = sef ? glyphSvg(sef.key, 20, sef.outline || sef.color, 2) : '<span class="dot none"></span>';
+        return (
+          `<button type="button" role="option" class="sug${i === active ? ' active' : ''}" aria-selected="${i === active}" data-i="${i}">` +
+          `${icon}<span class="sug-text"><span class="sug-title">${escapeHtml(n.title)}</span>` +
+          `<span class="sub">${escapeHtml(n.folder || 'root')}</span></span></button>`
+        );
+      })
+      .join('');
+    for (const b of box.querySelectorAll('.sug')) {
+      b.addEventListener('pointerdown', (e) => e.preventDefault());
+      b.addEventListener('click', () => pick(items[Number(b.dataset.i)]));
+    }
+  };
+
+  const update = () => {
+    const m = ta.value.slice(0, ta.selectionStart).match(OPEN_LINK);
+    if (!m || ta.selectionStart !== ta.selectionEnd) return close();
+    items = linkSuggestions(m[1]);
+    if (!items.length) return close();
+    active = Math.min(active, items.length - 1);
+    draw();
+    box.hidden = false;
+    place();
+  };
+
+  ta.addEventListener('input', () => {
+    active = 0;
+    update();
+  });
+  ta.addEventListener('click', update);
+  ta.addEventListener('keyup', (e) => {
+    if (['ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown'].includes(e.key)) update();
+  });
+  ta.addEventListener('keydown', (e) => {
+    if (box.hidden) return;
+    // The caret may have left the [[ since the list opened; then keys act normally.
+    if (!OPEN_LINK.test(ta.value.slice(0, ta.selectionStart))) {
+      close();
+      return;
+    }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      active = (active + (e.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length;
+      draw();
+    } else if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault();
+      pick(items[active]);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      close();
+    }
+  });
+  ta.addEventListener('blur', () => setTimeout(close, 150));
+  if (window.visualViewport) {
+    const onViewport = () => box.isConnected && !box.hidden && place();
+    window.visualViewport.addEventListener('resize', onViewport);
+    window.visualViewport.addEventListener('scroll', onViewport);
+  }
 }
 
 async function saveEditor() {
@@ -540,10 +797,20 @@ function route() {
   return showHome();
 }
 
+// Reads the vault's .vault/sefirot.json; without one, the built-in folder lists apply.
+async function loadSefirot() {
+  try {
+    if (!source.has || source.has(SEFIROT_PATH)) vault.setSefirotConfig(JSON.parse(await source.read(SEFIROT_PATH)));
+  } catch {
+    // missing or unreadable; keep the built-in lists
+  }
+}
+
 async function refresh() {
   $('refresh').disabled = true;
   try {
     await vault.load();
+    await loadSefirot();
     state.seen([...vault.notes.keys()]);
     renderSidebar();
     if (!editor) route();
@@ -617,6 +884,7 @@ async function start() {
     if (location.hash.startsWith('#/settings')) route();
     return;
   }
+  await loadSefirot();
   loaded = true;
   state.seen([...vault.notes.keys()]);
   renderSidebar();

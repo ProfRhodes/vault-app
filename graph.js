@@ -1,19 +1,58 @@
-// Canvas graph of the vault with three layouts:
+// Canvas graph of the vault with four layouts:
 //   web     notes pulled together by their links
 //   rings   consolidation: new notes in the hippocampus at the center,
 //           older ones drifting out toward the cortex
 //   wheel   Giordano Bruno's memory wheels: one wheel per top folder, every
 //           note in a fixed slot, drag a wheel to turn it
+//   tree    the Tree of Life: notes gathered at their sefirah, drawn in the
+//           Jewish "within" orientation (Binah, Gevurah, Hod on the left)
 // Every layout shares spreading activation (tap a note), forgetting-curve
 // dimming, and Hebbian edges that thicken as notes are opened together.
+// Dot color is the note's sefirah; a filled dot is the user's note, a hollow
+// ring an AI-written one.
 
 import { pairKey } from './state.js';
+import { BY_KEY, SEFIROT, NONE_COLOR, drawGlyph } from './sefirot.js';
 
 const DAY = 86400000;
-const COLORS = { notes: '#e0b84f', memory: '#a78bfa', knowledge: '#5eead4', '.claude': '#f472b6', root: '#9a92b0' };
-const EXTRA = ['#fb923c', '#60a5fa', '#a3e635', '#f87171'];
 const GROUP_ORDER = ['notes', 'memory', 'knowledge', '.claude'];
-const GLYPHS = ['☉', '☽', '☿', '♀', '♂', '♃', '♄'];
+// The seven planets around each memory wheel: Sun, Moon, Mercury, Venus,
+// Mars, Jupiter, Saturn, drawn as shapes.
+const PLANETS = ['tiferet', 'yesod', 'hod', 'netzach', 'gevurah', 'chesed', 'binah'];
+export const LAYOUTS = ['web', 'rings', 'wheel', 'tree'];
+
+const INK = {
+  ground: '#0b0a13',
+  groundHi: '#15121f',
+  text: '#ebe4d6',
+  muted: '#aaa9b7',
+  ivory: '#f1eadc',
+  gold: '234, 181, 50',
+  line: '170, 169, 183',
+};
+
+// Sefirah centers for the Tree view, in world units.
+const TREE = {
+  keter: [0, 0],
+  chokhmah: [300, 170],
+  binah: [-300, 170],
+  chesed: [300, 520],
+  gevurah: [-300, 520],
+  tiferet: [0, 700],
+  netzach: [300, 1000],
+  hod: [-300, 1000],
+  yesod: [0, 1180],
+  malkhut: [0, 1480],
+  none: [-330, 1480],
+};
+const TREE_R = 44;
+const TREE_PATHS = [
+  ['keter', 'chokhmah'], ['keter', 'binah'], ['keter', 'tiferet'], ['chokhmah', 'binah'], ['chokhmah', 'chesed'],
+  ['chokhmah', 'tiferet'], ['binah', 'gevurah'], ['binah', 'tiferet'], ['chesed', 'gevurah'], ['chesed', 'tiferet'],
+  ['chesed', 'netzach'], ['gevurah', 'tiferet'], ['gevurah', 'hod'], ['tiferet', 'netzach'], ['tiferet', 'hod'],
+  ['tiferet', 'yesod'], ['netzach', 'hod'], ['netzach', 'yesod'], ['netzach', 'malkhut'], ['hod', 'yesod'],
+  ['hod', 'malkhut'], ['yesod', 'malkhut'],
+];
 
 const RING_BANDS = [
   { days: 1, label: 'Today' },
@@ -42,9 +81,59 @@ function hash(s) {
 
 const angleDiff = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
 
-export function groupColor(group) {
-  if (COLORS[group]) return COLORS[group];
-  return EXTRA[Math.floor(hash(group) * EXTRA.length)];
+export function sefirahColor(key) {
+  const s = BY_KEY.get(key);
+  return s ? s.color : NONE_COLOR;
+}
+
+// Fills a dot in its sefirah's color: Binah's black gets a light outline so it
+// shows on the dark ground, and Malkhut is quartered in its four colors.
+function fillDot(ctx, x, y, r, key, s) {
+  const sef = BY_KEY.get(key);
+  if (sef && sef.quarters) {
+    sef.quarters.forEach((c, i) => {
+      ctx.fillStyle = c;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.arc(x, y, r, -Math.PI / 2 + (i * Math.PI) / 2, -Math.PI / 2 + ((i + 1) * Math.PI) / 2);
+      ctx.closePath();
+      ctx.fill();
+    });
+  } else {
+    ctx.fillStyle = sef ? sef.color : NONE_COLOR;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  if (sef && sef.outline) {
+    ctx.lineWidth = 1 / s;
+    ctx.strokeStyle = sef.outline;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+}
+
+function ringDot(ctx, x, y, r, key, s) {
+  const sef = BY_KEY.get(key);
+  ctx.fillStyle = INK.ground;
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.lineWidth = Math.max(1.4 / s, r * 0.32);
+  // Binah's ring stays black with a thin light edge, so it never reads as
+  // Chokhmah's grey.
+  ctx.strokeStyle = sef ? (sef.outline && !sef.quarters ? sef.color : sef.outline || sef.color) : NONE_COLOR;
+  ctx.beginPath();
+  ctx.arc(x, y, r - ctx.lineWidth / 2, 0, Math.PI * 2);
+  ctx.stroke();
+  if (sef && sef.outline && !sef.quarters) {
+    ctx.lineWidth = 1 / s;
+    ctx.strokeStyle = sef.outline;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.stroke();
+  }
 }
 
 export function orderGroups(groups) {
@@ -78,6 +167,8 @@ export class GraphView {
     this.visible = false;
     this.w = 0;
     this.h = 0;
+    this.filter = null;
+    this.hiddenCount = 0;
     this.bindEvents();
     new ResizeObserver(() => this.resize()).observe(canvas.parentElement);
   }
@@ -87,7 +178,9 @@ export class GraphView {
   setData(vault, state, now = Date.now()) {
     this.state = state;
     const old = this.byPath;
-    const notes = [...vault.notes.values()].sort((a, b) => a.group.localeCompare(b.group) || hash(a.path) - hash(b.path));
+    const all = [...vault.notes.values()];
+    const notes = (this.filter ? all.filter(this.filter) : all).sort((a, b) => a.group.localeCompare(b.group) || hash(a.path) - hash(b.path));
+    this.hiddenCount = all.length - notes.length;
     this.nodes = notes.map((n, i) => {
       const prev = old.get(n.path);
       const info = state.info(n.path);
@@ -99,6 +192,8 @@ export class GraphView {
         title: n.title,
         group: n.group,
         folder: n.folder,
+        sefirah: n.sefirah || null,
+        author: n.author || 'ai',
         degree: 0,
         born,
         age: Math.max(0, now - born) / DAY,
@@ -150,15 +245,41 @@ export class GraphView {
   }
 
   setLayout(name) {
-    if (!['web', 'rings', 'wheel'].includes(name)) name = 'web';
+    if (!LAYOUTS.includes(name)) name = 'web';
     this.layout = name;
     this.applyLayout(false);
+  }
+
+  // Tree: each note sits in a small spiral around its sefirah; notes with no
+  // sefirah gather beside Malkhut.
+  layoutTree() {
+    const by = new Map();
+    for (const n of this.nodes) {
+      const k = n.sefirah && TREE[n.sefirah] ? n.sefirah : 'none';
+      if (!by.has(k)) by.set(k, []);
+      by.get(k).push(n);
+    }
+    this.treeCounts = new Map([...by].map(([k, list]) => [k, list.length]));
+    for (const [k, list] of by) {
+      const [cx, cy] = TREE[k];
+      list.sort((p, q) => hash(p.path) - hash(q.path));
+      const start = k === 'none' ? 8 : TREE_R + 12;
+      // Big sefirot pack tighter so a crowded one stays clear of its neighbors.
+      const step = list.length > 120 ? 7 : 9;
+      list.forEach((n, i) => {
+        const r = start + step * Math.sqrt(i + 1);
+        const t = i * 2.39996;
+        n.tx = cx + r * Math.cos(t);
+        n.ty = cy + r * Math.sin(t);
+      });
+    }
   }
 
   applyLayout(fresh) {
     if (this.layout === 'web') {
       this.alpha = fresh ? 1 : 0.3;
       if (fresh) for (let i = 0; i < 400 && this.alpha > 0.02; i++) this.tick();
+      else this.refitWhenSettled = true;
       for (const n of this.nodes) {
         n.tx = n.x;
         n.ty = n.y;
@@ -166,6 +287,7 @@ export class GraphView {
     } else {
       this.alpha = 0;
       if (this.layout === 'rings') this.layoutRings();
+      else if (this.layout === 'tree') this.layoutTree();
       else this.layoutWheel();
       if (fresh) for (const n of this.nodes) {
         n.x = n.tx;
@@ -403,6 +525,14 @@ export class GraphView {
       const r = CORE + (RING_BANDS.length - 1) * BAND;
       pts.push([-r, -r], [r, r + 30]);
     }
+    if (this.layout === 'tree') {
+      for (const s of SEFIROT) {
+        const [x, y] = TREE[s.key];
+        pts.push([x - TREE_R - 20, y - TREE_R - 20], [x + TREE_R + 20, y + TREE_R + 40]);
+      }
+      // Room for the layout tabs above Keter and the Key and + button below Malkhut.
+      pts.push([0, TREE.keter[1] - TREE_R - 150], [0, TREE.malkhut[1] + TREE_R + 170]);
+    }
     for (const [x, y] of pts) {
       minX = Math.min(minX, x);
       maxX = Math.max(maxX, x);
@@ -591,6 +721,11 @@ export class GraphView {
       }
       busy = true;
     } else {
+      if (this.layout === 'web' && this.refitWhenSettled) {
+        this.refitWhenSettled = false;
+        this.fit(false);
+        busy = true;
+      }
       for (const n of this.nodes) {
         const dx = n.tx - n.x;
         const dy = n.ty - n.y;
@@ -626,25 +761,28 @@ export class GraphView {
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     ctx.clearRect(0, 0, this.w, this.h);
     const bg = ctx.createRadialGradient(this.w / 2, this.h / 2, 0, this.w / 2, this.h / 2, Math.max(this.w, this.h) * 0.7);
-    bg.addColorStop(0, '#171226');
-    bg.addColorStop(1, '#0b0912');
+    bg.addColorStop(0, INK.groundHi);
+    bg.addColorStop(1, INK.ground);
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, this.w, this.h);
 
     ctx.setTransform(this.dpr * s, 0, 0, this.dpr * s, this.dpr * (this.w / 2 - this.cam.x * s), this.dpr * (this.h / 2 - this.cam.y * s));
     if (this.layout === 'rings') this.drawRings(ctx, s);
     if (this.layout === 'wheel') this.drawWheels(ctx, s);
+    if (this.layout === 'tree') this.drawTree(ctx, s);
 
     const acts = new Map();
     for (const n of this.act.keys()) acts.set(n, this.actAt(n, t));
     const actOf = (n) => acts.get(n) || 0;
 
+    // On the Tree the sefirot paths carry the structure, so note links stay quieter.
+    const quiet = this.layout === 'tree' ? 0.45 : 1;
     for (const e of this.edges) {
-      const fade = Math.min(e.a.strength, e.b.strength);
+      const fade = Math.min(e.a.strength, e.b.strength) * quiet;
       const width = (1 + Math.log2(1 + e.w) * 1.3) / s;
       ctx.lineWidth = width;
       ctx.setLineDash(e.linked ? [] : [5 / s, 4 / s]);
-      ctx.strokeStyle = e.w > 0 ? `rgba(224, 184, 79, ${0.18 + 0.3 * fade})` : `rgba(167, 139, 250, ${0.1 + 0.25 * fade})`;
+      ctx.strokeStyle = e.w > 0 ? `rgba(${INK.gold}, ${0.18 + 0.3 * fade})` : `rgba(${INK.line}, ${0.1 + 0.25 * fade})`;
       ctx.beginPath();
       ctx.moveTo(e.a.x, e.a.y);
       ctx.lineTo(e.b.x, e.b.y);
@@ -669,18 +807,25 @@ export class GraphView {
         ctx.fill();
       }
       ctx.globalAlpha = 0.22 + 0.78 * n.strength;
-      ctx.fillStyle = groupColor(n.group);
-      ctx.beginPath();
-      ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
-      ctx.fill();
+      if (n.author === 'user') fillDot(ctx, n.x, n.y, r, n.sefirah, s);
+      else ringDot(ctx, n.x, n.y, r, n.sefirah, s);
+      // The sign shows inside the dot once it is big enough to read.
+      if (n.sefirah && r * s >= 9) {
+        const sef = BY_KEY.get(n.sefirah);
+        const ink = n.author === 'user' ? (sef.outline ? sef.outline : INK.ground) : sef.outline || sef.color;
+        drawGlyph(ctx, n.sefirah, n.x, n.y, r * 1.25, ink, 2.2);
+      }
       ctx.globalAlpha = 1;
       if (n === this.selected || n === this.hovered) {
         ctx.lineWidth = 2 / s;
-        ctx.strokeStyle = '#ffffff';
+        ctx.strokeStyle = INK.ivory;
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, r + 2 / s, 0, Math.PI * 2);
         ctx.stroke();
       }
     }
 
+    if (this.layout === 'tree') this.drawTreeMarks(ctx, s);
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     if (this.layout === 'wheel') this.drawPointer(ctx);
     this.drawLabels(ctx, actOf);
@@ -699,7 +844,7 @@ export class GraphView {
       if (p) picks.push([p, n]);
     }
     picks.sort((a, b) => b[0] - a[0] || b[1].degree - a[1].degree);
-    ctx.font = '12px system-ui, sans-serif';
+    ctx.font = '14px Inter, system-ui, sans-serif';
     ctx.textBaseline = 'middle';
     for (const [p, n] of picks.slice(0, 40)) {
       const [x, y] = this.toScreen(n.x, n.y);
@@ -707,9 +852,9 @@ export class GraphView {
       const tx = x + n.radius * s + 6;
       ctx.globalAlpha = p >= 2 ? 1 : 0.75;
       ctx.lineWidth = 3;
-      ctx.strokeStyle = 'rgba(11, 9, 18, 0.85)';
+      ctx.strokeStyle = 'rgba(11, 10, 19, 0.85)';
       ctx.strokeText(text, tx, y);
-      ctx.fillStyle = p >= 2 ? '#ffffff' : '#d8d0ea';
+      ctx.fillStyle = p >= 2 ? INK.ivory : INK.text;
       ctx.fillText(text, tx, y);
     }
     ctx.globalAlpha = 1;
@@ -718,26 +863,26 @@ export class GraphView {
   drawRings(ctx, s) {
     ctx.lineWidth = 1 / s;
     const core = ctx.createRadialGradient(0, 0, 0, 0, 0, CORE);
-    core.addColorStop(0, 'rgba(224, 184, 79, 0.16)');
-    core.addColorStop(1, 'rgba(224, 184, 79, 0.02)');
+    core.addColorStop(0, `rgba(${INK.gold}, 0.16)`);
+    core.addColorStop(1, `rgba(${INK.gold}, 0.02)`);
     ctx.fillStyle = core;
     ctx.beginPath();
     ctx.arc(0, 0, CORE, 0, Math.PI * 2);
     ctx.fill();
-    ctx.font = `${12 / s}px system-ui, sans-serif`;
+    ctx.font = `${14 / s}px Inter, system-ui, sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     RING_BANDS.forEach((band, i) => {
       const outer = CORE + i * BAND;
-      ctx.strokeStyle = i === RING_BANDS.length - 1 ? 'rgba(167, 139, 250, 0.35)' : 'rgba(167, 139, 250, 0.18)';
+      ctx.strokeStyle = i === RING_BANDS.length - 1 ? `rgba(${INK.line}, 0.35)` : `rgba(${INK.line}, 0.18)`;
       ctx.beginPath();
       ctx.arc(0, 0, outer, 0, Math.PI * 2);
       ctx.stroke();
-      ctx.fillStyle = 'rgba(216, 208, 234, 0.55)';
+      ctx.fillStyle = `rgba(${INK.line}, 0.75)`;
       ctx.fillText(band.label, 0, -outer + 12 / s);
     });
-    ctx.fillStyle = 'rgba(224, 184, 79, 0.8)';
-    ctx.font = `600 ${11 / s}px system-ui, sans-serif`;
+    ctx.fillStyle = INK.text;
+    ctx.font = `${14 / s}px Cinzel, serif`;
     ctx.textBaseline = 'middle';
     ctx.fillText('HIPPOCAMPUS', 0, CORE * 0.55);
     ctx.fillText('CORTEX', 0, CORE + (RING_BANDS.length - 1) * BAND + 16 / s);
@@ -748,7 +893,7 @@ export class GraphView {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     for (const w of this.wheels) {
-      const color = groupColor(w.group);
+      const color = INK.muted;
       ctx.fillStyle = 'rgba(255, 255, 255, 0.025)';
       ctx.beginPath();
       ctx.arc(0, 0, w.outer, 0, Math.PI * 2);
@@ -771,19 +916,69 @@ export class GraphView {
         ctx.stroke();
       }
       ctx.globalAlpha = 0.7;
-      ctx.fillStyle = color;
-      ctx.font = `${11 / s}px serif`;
       for (let k = 0; k < 12; k++) {
         const t = (k / 12) * Math.PI * 2 - Math.PI / 2 + w.turn + Math.PI / 12;
         const r = w.outer + 9 / s;
-        ctx.fillText(GLYPHS[k % GLYPHS.length], r * Math.cos(t), r * Math.sin(t));
+        drawGlyph(ctx, PLANETS[k % PLANETS.length], r * Math.cos(t), r * Math.sin(t), 11 / s, color, 1.8);
       }
       ctx.globalAlpha = 1;
-      ctx.font = `600 ${10 / s}px system-ui, sans-serif`;
-      ctx.fillStyle = color;
+      ctx.font = `${12 / s}px Cinzel, serif`;
+      ctx.fillStyle = INK.text;
       ctx.fillText(w.group.toUpperCase(), 0, w.inner + (w.outer - w.inner) / 2 + 0.5);
     }
     ctx.textAlign = 'left';
+  }
+
+  // The 22 paths go under the notes.
+  drawTree(ctx, s) {
+    ctx.lineWidth = 1.5 / s;
+    ctx.strokeStyle = `rgba(${INK.line}, 0.22)`;
+    for (const [a, b] of TREE_PATHS) {
+      ctx.beginPath();
+      ctx.moveTo(TREE[a][0], TREE[a][1]);
+      ctx.lineTo(TREE[b][0], TREE[b][1]);
+      ctx.stroke();
+    }
+  }
+
+  // The sefirot, their names and counts go over the notes, so a crowded
+  // sefirah never buries its own label.
+  drawTreeMarks(ctx, s) {
+    const halo = (text, x, y) => {
+      ctx.lineWidth = 4 / s;
+      ctx.strokeStyle = 'rgba(11, 10, 19, 0.9)';
+      ctx.strokeText(text, x, y);
+      ctx.fillText(text, x, y);
+    };
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    const counts = this.treeCounts || new Map();
+    for (const sef of SEFIROT) {
+      const [x, y] = TREE[sef.key];
+      const ink = sef.outline || sef.color;
+      ctx.fillStyle = INK.ground;
+      ctx.beginPath();
+      ctx.arc(x, y, TREE_R, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.lineWidth = 2 / s;
+      ctx.strokeStyle = ink;
+      ctx.stroke();
+      drawGlyph(ctx, sef.key, x, y, TREE_R * 1.1, ink, 1.6);
+      ctx.fillStyle = INK.text;
+      ctx.font = `${16 / s}px Cinzel, serif`;
+      halo(sef.name.toUpperCase(), x, y + TREE_R + 8 / s);
+      ctx.fillStyle = INK.muted;
+      ctx.font = `${14 / s}px Inter, system-ui, sans-serif`;
+      halo(`${sef.short} · ${counts.get(sef.key) || 0}`, x, y + TREE_R + 28 / s);
+    }
+    if (counts.get('none')) {
+      const [x, y] = TREE.none;
+      ctx.fillStyle = INK.muted;
+      ctx.font = `${14 / s}px Inter, system-ui, sans-serif`;
+      halo(`Unsorted · ${counts.get('none')}`, x, y + 60);
+    }
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
   }
 
   drawPointer(ctx) {
@@ -791,13 +986,13 @@ export class GraphView {
     const outer = this.wheels[this.wheels.length - 1].outer;
     const [cx, cy] = this.toScreen(0, 0);
     const top = cy - outer * this.cam.s;
-    ctx.strokeStyle = 'rgba(224, 184, 79, 0.35)';
+    ctx.strokeStyle = `rgba(${INK.gold}, 0.35)`;
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(cx, cy - this.wheels[0].inner * this.cam.s);
     ctx.lineTo(cx, top - 14);
     ctx.stroke();
-    ctx.fillStyle = '#e0b84f';
+    ctx.fillStyle = `rgb(${INK.gold})`;
     ctx.beginPath();
     ctx.moveTo(cx - 8, top - 26);
     ctx.lineTo(cx + 8, top - 26);

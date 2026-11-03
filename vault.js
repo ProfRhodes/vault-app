@@ -3,6 +3,7 @@
 // read(path) and write(path, text, message); readMany(paths) is optional.
 
 import { splitFrontmatter } from './markdown.js';
+import { classify, folderMap } from './sefirot.js';
 
 // Reads a local folder served over http. manifest.json lists the note paths
 // because a browser cannot list a directory on its own. Writes only work with
@@ -103,6 +104,17 @@ export class Vault {
     this.source = source;
     this.notes = new Map();
     this.keys = new Map();
+    this.folders = folderMap(null);
+  }
+
+  // Folder lists from the vault's .vault/sefirot.json, or the built-in ones.
+  setSefirotConfig(config) {
+    this.folders = folderMap(config);
+    this.classifyAll();
+  }
+
+  classifyAll() {
+    for (const note of this.notes.values()) Object.assign(note, classify(note, this.folders));
   }
 
   // onStep(message) reports progress, so a slow first load on a phone shows
@@ -121,6 +133,7 @@ export class Vault {
   }
 
   rebuild() {
+    this.classifyAll();
     this.indexKeys();
     this.buildLinks();
   }

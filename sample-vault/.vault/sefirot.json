@@ -1,0 +1,102 @@
+{
+  "version": 1,
+  "instructions": "Every note in this vault belongs to one of the ten sefirot below, chosen by meaning. When you write or edit a note, add frontmatter lines \"sephira: <key>\" (optionally a second after a comma, for example \"sephira: hod, tiferet\") and \"author: ai\". Notes without a sephira line fall back to the folders listed here.",
+  "sefirot": [
+    {
+      "key": "keter",
+      "name": "Keter",
+      "meaning": "Crown. Purpose, goals, the big why behind a project or a life.",
+      "folders": [
+        "notes/purpose"
+      ]
+    },
+    {
+      "key": "chokhmah",
+      "name": "Chokhmah",
+      "meaning": "Wisdom. Sparks: raw ideas and first flashes, before they have a form.",
+      "folders": [
+        "notes/voice-capture-idea.md",
+        "notes/ideas"
+      ]
+    },
+    {
+      "key": "binah",
+      "name": "Binah",
+      "meaning": "Understanding. Study turned into structure: research, distilled sources, plans, budgets.",
+      "folders": [
+        "knowledge/occult",
+        "knowledge/board-knowledge",
+        "knowledge/kabbalah",
+        "notes/plans"
+      ]
+    },
+    {
+      "key": "chesed",
+      "name": "Chesed",
+      "meaning": "Kindness. Giving and wealth: income, generosity, charity, hospitality.",
+      "folders": [
+        "notes/money"
+      ]
+    },
+    {
+      "key": "gevurah",
+      "name": "Gevurah",
+      "meaning": "Strength. Discipline and rules: exercise, security, the rulings given to Claude.",
+      "folders": [
+        "notes/exercise",
+        ".claude/skills",
+        "CLAUDE.md",
+        "AGENTS.md"
+      ]
+    },
+    {
+      "key": "tiferet",
+      "name": "Tiferet",
+      "meaning": "Beauty. Teaching (giving knowledge) and the self: lessons, reflection.",
+      "folders": [
+        "knowledge/education",
+        "notes/teaching"
+      ]
+    },
+    {
+      "key": "netzach",
+      "name": "Netzach",
+      "meaning": "Victory. Art and play: content, design, games, Instagram.",
+      "folders": [
+        "knowledge/design",
+        "knowledge/game-dev",
+        "knowledge/content",
+        "roblox-game"
+      ]
+    },
+    {
+      "key": "hod",
+      "name": "Hod",
+      "meaning": "Splendour. Learning (receiving knowledge), science, code.",
+      "folders": [
+        "knowledge/neuroscience",
+        "knowledge/technology-research",
+        "notes/learning"
+      ]
+    },
+    {
+      "key": "yesod",
+      "name": "Yesod",
+      "meaning": "Foundation. Dreams, imagination and memory, including the memory files Claude keeps.",
+      "folders": [
+        "memory",
+        "notes/dreams"
+      ]
+    },
+    {
+      "key": "malkhut",
+      "name": "Malkhut",
+      "meaning": "Kingship. Speech and daily life: public speaking, bills, errands, the physical world.",
+      "folders": [
+        "notes/shopping",
+        "notes/speaking",
+        "notes/life"
+      ]
+    }
+  ]
+}

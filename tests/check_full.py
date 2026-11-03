@@ -82,7 +82,8 @@ def tap_node(page, path):
 def local_checks(browser, vault_dir):
     errors = []
     ctx = browser.new_context(viewport={"width": 1280, "height": 800}, service_workers="block")
-    ctx.add_init_script("localStorage.setItem('vault-welcomed', '1');")
+    # These checks need every note on the graph; hiding has its own checks.
+    ctx.add_init_script("localStorage.setItem('vault-welcomed', '1'); localStorage.setItem('vault-hidden', '[]');")
     page = ctx.new_page()
     watch_errors(page, errors)
 
@@ -411,7 +412,7 @@ def github_checks(browser):
     gh = FakeGitHub()
     ctx = browser.new_context(viewport={"width": 1280, "height": 800}, service_workers="block")
     ctx.add_init_script(
-        "localStorage.setItem('vault-settings', JSON.stringify({owner: 'me', repo: 'vault', branch: 'main', token: 'tok123'})); localStorage.setItem('vault-welcomed', '1');"
+        "localStorage.setItem('vault-settings', JSON.stringify({owner: 'me', repo: 'vault', branch: 'main', token: 'tok123'})); localStorage.setItem('vault-welcomed', '1'); localStorage.setItem('vault-hidden', '[]');"
     )
     ctx.route("https://api.github.com/**", gh.handle)
     page = ctx.new_page()
@@ -539,6 +540,84 @@ def pwa_checks(browser):
     ctx.close()
 
 
+# ---------------------------------------------------------------- sefirot, hiding, Tree, link suggestions
+
+def sefirot_checks(browser):
+    errors = []
+    ctx = browser.new_context(viewport={"width": 390, "height": 844}, service_workers="block")
+    ctx.add_init_script("localStorage.setItem('vault-welcomed', '1');")
+    page = ctx.new_page()
+    watch_errors(page, errors)
+
+    page.goto(BASE + "#/note/" + enc("knowledge/occult/giordano-bruno.md"))
+    page.wait_for_selector(".markdown")
+    sef = page.evaluate(
+        """() => Object.fromEntries([...window.__vault.vault.notes.values()].map(n => [n.path, [n.sefirah, n.author]]))"""
+    )
+    check("folders from .vault/sefirot.json sort notes", sef["knowledge/occult/giordano-bruno.md"][0] == "binah" and sef["knowledge/neuroscience/forgetting-curve.md"][0] == "hod")
+    check("memory files go to Yesod", sef["memory/MEMORY.md"][0] == "yesod")
+    check("a single file can be listed", sef["notes/voice-capture-idea.md"][0] == "chokhmah")
+    check("notes with no match stay unsorted", sef["notes/welcome.md"][0] is None)
+    check("notes folder is the user's, the rest AI", sef["notes/welcome.md"][1] == "user" and sef["knowledge/occult/giordano-bruno.md"][1] == "ai")
+    tagged = page.evaluate(
+        """() => import('./sefirot.js').then(m => [
+            m.classify({path: 'knowledge/x.md', meta: {sephira: 'Tiphareth, hod', author: 'me'}}, m.folderMap(null)),
+            m.classify({path: 'notes/money/rent.md', meta: {}}, m.folderMap(null)),
+            m.classify({path: 'CLAUDE.md', meta: {}}, m.folderMap(null)),
+        ])"""
+    )
+    check("a sephira line wins, with spelling variants and a second", tagged[0]["sefirah"] == "tiferet" and tagged[0]["second"] == "hod")
+    check("an author line overrides the folder", tagged[0]["author"] == "user")
+    check("built-in folders cover new notes folders", tagged[1]["sefirah"] == "chesed" and tagged[2]["sefirah"] == "gevurah")
+
+    check("note shows its sefirah at the top", "Binah" in page.locator(".sef-label").inner_text())
+    sign = page.locator(".note-sign").bounding_box()
+    para = page.locator(".markdown p").first.bounding_box()
+    check("the sign sits behind the title, clear of the text", sign is not None and sign["y"] + sign["height"] <= para["y"], f"{sign} {para}")
+    check("only one + button, no mic button", page.locator(".fab a").count() == 1 and page.locator(".fab a[href='#/new/voice']").count() == 0)
+
+    total = page.evaluate("window.__vault.vault.notes.size")
+    page.goto(BASE + "#/graph/tree")
+    wait_graph(page, total - 3)
+    check("Claude's memory starts hidden", page.evaluate("window.__vault.graph.hiddenCount") == 3)
+    check("four layout tabs, Tree last", page.locator(".graph-tools .seg").all_inner_texts() == ["Web", "Consolidation", "Wheel", "Tree"])
+    page.click("#graph-legend summary")
+    check("Key says how many are hidden", "3 notes hidden" in page.locator(".hidden-count").inner_text())
+    page.click("button.toggle[data-hide='folder:memory']")
+    wait_graph(page, total)
+    check("showing Claude's memory adds it back", page.locator("button.toggle[data-hide='folder:memory']").get_attribute("aria-pressed") == "true")
+    page.click("button.toggle[data-hide='sef:hod']")
+    wait_graph(page, total - 2)
+    check("a sefirah can be hidden", all(n != "hod" for n in page.evaluate("window.__vault.graph.nodes.map(n => n.sefirah)")))
+    page.click("button.toggle[data-hide='author:ai']")
+    check("AI notes can be hidden", page.evaluate("window.__vault.graph.nodes.every(n => n.author === 'user')"))
+    page.reload()
+    page.wait_for_selector("#graph-canvas")
+    wait_until(page, "window.__vault.graph && window.__vault.graph.nodes.length > 0")
+    check("hiding is remembered on this device", page.evaluate("window.__vault.graph.nodes.every(n => n.author === 'user')"))
+    page.evaluate("localStorage.removeItem('vault-hidden')")
+
+    page.goto(BASE + "#/edit/" + enc("notes/voice-capture-idea.md"))
+    page.wait_for_selector("#ed-body")
+    page.click("#ed-body")
+    page.keyboard.press("Control+End")
+    page.keyboard.type("\nSee [[spre")
+    wait_until(page, "!document.getElementById('ed-suggest').hidden")
+    check("typing [[ suggests notes", page.locator("#ed-suggest .sug-title").all_inner_texts() == ["Spreading activation"])
+    check("suggestions are 48 px rows", page.locator("#ed-suggest .sug").first.bounding_box()["height"] >= 48)
+    page.locator("#ed-suggest .sug").first.click()
+    check("picking one writes the file name link", page.input_value("#ed-body").endswith("See [[spreading-activation]]"))
+    check("the list closes after a pick", page.evaluate("document.getElementById('ed-suggest').hidden"))
+    page.keyboard.type(" and [[")
+    wait_until(page, "!document.getElementById('ed-suggest').hidden")
+    check("an empty query shows up to four", 1 <= page.locator("#ed-suggest .sug").count() <= 4)
+    page.keyboard.press("Escape")
+    check("Escape closes the list", page.evaluate("document.getElementById('ed-suggest').hidden"))
+
+    check("no console errors in sefirot checks", not errors, "; ".join(errors))
+    ctx.close()
+
+
 # ---------------------------------------------------------------- house rules
 
 def text_checks():
@@ -549,6 +628,13 @@ def text_checks():
             if chr(0x2014) in s or "&" + "mdash;" in s:
                 bad.append(str(f.relative_to(APP)))
     check("no em dashes anywhere in the app", not bad, ", ".join(bad))
+    planets = []
+    for f in APP.glob("*"):
+        if f.is_file() and f.suffix in {".js", ".css", ".html"}:
+            s = f.read_text(encoding="utf-8")
+            if any(0x2609 <= ord(c) <= 0x2647 for c in s):
+                planets.append(f.name)
+    check("planet signs are drawn, never text characters", not planets, ", ".join(planets))
 
 
 def main():
@@ -567,6 +653,7 @@ def main():
             browser = p.chromium.launch()
             local_checks(browser, vault_dir)
             voice_checks(browser, vault_dir)
+            sefirot_checks(browser)
             github_checks(browser)
             help_checks(browser)
             pwa_checks(browser)
